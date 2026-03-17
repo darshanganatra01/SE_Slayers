@@ -15,20 +15,15 @@
       <span class="oc-id">{{ order.id }}</span>
       <div class="oc-chips">
         <span class="chip" :style="{ background: PB[order.priority], color: PC[order.priority] }">{{ order.priority }}</span>
-        <span class="chip" :style="{ background: CB[order.custType], color: CC[order.custType] }">{{ order.custType }}</span>
       </div>
     </div>
 
     <div class="oc-body">
-      <div class="oc-name">{{ order.customer }}</div>
-      <div class="oc-sub">
-        <span class="cust-pip" :style="{ background: CC[order.custType] }"></span>
-        {{ order.shop }}
-      </div>
+      <div class="oc-name">{{ order.shop }}</div>
       <div class="items-wrap">
         <div v-for="(it, i) in order.items" :key="i" class="irow">
           <span class="irow-name">{{ it.name }}</span>
-          <span :class="it.inStock ? 'istock-y' : 'istock-n'">{{ it.inStock ? '✓ In stock' : '✕ Out' }}</span>
+          <span class="irow-qty">Qty: {{ it.qty || 1 }}</span>
         </div>
       </div>
     </div>
@@ -44,7 +39,7 @@
 
     <div class="oc-foot">
       <span class="oc-val">{{ order.value }}</span>
-      <span class="oc-dl">Due {{ order.deadline }}</span>
+      <span class="oc-dl">Placed {{ order.placedOn  }}</span>
     </div>
 
     <div class="drag-handle">⠿</div>
@@ -144,8 +139,7 @@ export default {
 }
 .irow:last-child { border-bottom: none; }
 .irow-name { color: var(--ink-3); }
-.istock-y  { font-size: 10px; font-weight: 600; color: var(--green); }
-.istock-n  { font-size: 10px; font-weight: 600; color: var(--red); }
+.irow-qty  { font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500; color: var(--ink-3); }
 
 .oc-extra { padding: 0 12px 8px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ink-4); }
 .oc-extra span { display: flex; align-items: center; gap: 3px; }

@@ -7,10 +7,9 @@
           <div class="dp-oid">{{ order.id }}</div>
           <button class="dp-close-btn" @click="$emit('close')">Close ✕</button>
         </div>
-        <div class="dp-name">{{ order.customer }}</div>
+        <div class="dp-name">{{ order.shop }}</div>
         <div class="dp-chips-row">
           <span class="chip" :style="{ background: PB[order.priority], color: PC[order.priority] }">{{ order.priority }} Priority</span>
-          <span class="chip" :style="{ background: CB[order.custType],  color: CC[order.custType]  }">{{ CL[order.custType] }}</span>
         </div>
       </div>
 
@@ -18,17 +17,17 @@
 
         <div>
           <div class="dp-sec-label">Details</div>
-          <div class="dp-kv"><span class="k">Value</span>    <span class="v" style="color:var(--green)">{{ order.value }}</span></div>
-          <div class="dp-kv"><span class="k">Deadline</span> <span class="v">{{ order.deadline }}</span></div>
-          <div class="dp-kv"><span class="k">Shop</span>     <span class="v">{{ order.shop }}</span></div>
-          <div class="dp-kv"><span class="k">Status</span>   <span class="v" :style="{ color: SC[order.status] }">{{ SL[order.status] }}</span></div>
+          <div class="dp-kv"><span class="k">Value</span>        <span class="v" style="color:var(--green)">{{ order.value }}</span></div>
+          <div class="dp-kv"><span class="k">Order Placed on</span> <span class="v">{{ order.placedOn }}</span></div>
+          <div class="dp-kv"><span class="k">Customer</span>     <span class="v">{{ order.customer }}</span></div>
+          <div class="dp-kv"><span class="k">Status</span>       <span class="v" :style="{ color: SC[order.status] }">{{ SL[order.status] }}</span></div>
         </div>
 
         <div>
           <div class="dp-sec-label">Items ({{ order.items.length }})</div>
           <div v-for="(it, i) in order.items" :key="i" class="dp-item-row">
             <span>{{ it.name }}</span>
-            <span :class="it.inStock ? 'istock-y' : 'istock-n'">{{ it.inStock ? '✓ In stock' : '✕ Out' }}</span>
+            <span class="item-qty">Qty: {{ it.qty || 1 }}</span>
           </div>
         </div>
 
@@ -57,7 +56,7 @@
         <button
           v-if="order.status !== 'shipped'"
           class="dp-action-btn dp-btn-fwd"
-          @click="$emit('promote', { id: order.id, newStatus: nextStatus })"
+          @click="onForwardClick"
         >
           → Mark as {{ SL[nextStatus] }}
         </button>
@@ -72,6 +71,37 @@
 
     </template>
   </div>
+
+  <!-- Transport modal — shown when marking as Shipped -->
+  <teleport to="body">
+    <div v-if="showTransportModal" class="tr-overlay" @click.self="showTransportModal = false">
+      <div class="tr-box">
+        <div class="tr-head">
+          <div class="tr-title">Select Transport</div>
+          <button class="dp-close-btn" @click="showTransportModal = false">✕</button>
+        </div>
+        <div class="tr-body">
+          <div class="fg">
+            <label class="fl">Carrier</label>
+            <select class="fi" v-model="selectedTransport">
+              <option value="">Select carrier…</option>
+              <option>BlueDart Express</option>
+              <option>DTDC Courier</option>
+              <option>Delhivery</option>
+              <option>Ekart Logistics</option>
+              <option>India Post</option>
+              <option>Shadowfax</option>
+              <option>Xpressbees</option>
+            </select>
+          </div>
+        </div>
+        <div class="tr-foot">
+          <button class="btn-cancel" @click="showTransportModal = false">Cancel</button>
+          <button class="btn btn-primary" :disabled="!selectedTransport" @click="confirmShip">Confirm Shipped</button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>
 
 <script>
@@ -84,12 +114,40 @@ export default {
   },
   emits: ['close', 'promote'],
   data() {
-    return { CC, CB, CL, PC, PB, SC, SL, steps: ['inprocess', 'packed', 'shipped'] }
+    return {
+      CC, CB, CL, PC, PB, SC, SL,
+      steps: ['inprocess', 'packed', 'shipped'],
+      showTransportModal: false,
+      selectedTransport: ''
+    }
   },
   computed: {
     currentStep() { return this.steps.indexOf(this.order?.status) },
     nextStatus()  { return this.steps[this.currentStep + 1] },
     prevStatus()  { return this.steps[this.currentStep - 1] }
+  },
+  methods: {
+    onForwardClick() {
+      if (this.nextStatus === 'shipped') {
+        // Open transport picker before emitting
+        this.selectedTransport = ''
+        this.showTransportModal = true
+      } else {
+        // Direct promote for inprocess → packed (no extra info needed)
+        this.$emit('promote', { id: this.order.id, newStatus: this.nextStatus })
+      }
+    },
+    confirmShip() {
+      if (!this.selectedTransport) return
+      // Emit promote with transport — backend can pick this up directly
+      this.$emit('promote', {
+        id:         this.order.id,
+        newStatus:  'shipped',
+        transport:  this.selectedTransport
+      })
+      this.showTransportModal = false
+      this.selectedTransport = ''
+    }
   }
 }
 </script>
@@ -124,7 +182,7 @@ export default {
   flex: 1; overflow-y: auto; padding: 14px 18px;
   display: flex; flex-direction: column; gap: 14px;
 }
-.dp-scroll::-webkit-scrollbar { width: 3px; }
+.dp-scroll::-webkit-scrollbar       { width: 3px; }
 .dp-scroll::-webkit-scrollbar-thumb { background: var(--border-2); }
 
 .dp-sec-label {
@@ -133,9 +191,9 @@ export default {
   display: flex; align-items: center; gap: 8px;
 }
 .dp-sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
-.dp-kv   { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12.5px; }
-.dp-kv .k { color: var(--ink-4); }
-.dp-kv .v { color: var(--ink); font-weight: 500; }
+.dp-kv      { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12.5px; }
+.dp-kv .k   { color: var(--ink-4); }
+.dp-kv .v   { color: var(--ink); font-weight: 500; }
 
 .dp-item-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -143,8 +201,7 @@ export default {
   background: var(--surface); border: 1px solid var(--border-2); margin-bottom: 4px;
 }
 .dp-item-row:last-child { margin-bottom: 0; }
-.istock-y { font-size: 10px; font-weight: 600; color: var(--green); }
-.istock-n { font-size: 10px; font-weight: 600; color: var(--red); }
+.item-qty { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-3); }
 
 .dp-footer {
   padding: 12px 18px;
@@ -171,8 +228,31 @@ export default {
   margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px;
 }
 .dp-action-btn:last-child { margin-bottom: 0; }
-.dp-btn-fwd { background: var(--blue); color: #fff; }
-.dp-btn-fwd:hover { background: #1d4ed8; }
-.dp-btn-back { background: transparent; border: 1.5px solid var(--border) !important; color: var(--ink-2); }
-.dp-btn-back:hover { border-color: var(--ink) !important; color: var(--ink); }
+.dp-btn-fwd            { background: var(--blue); color: #fff; }
+.dp-btn-fwd:hover      { background: #1d4ed8; }
+.dp-btn-back           { background: transparent; border: 1.5px solid var(--border) !important; color: var(--ink-2); }
+.dp-btn-back:hover     { border-color: var(--ink) !important; color: var(--ink); }
+
+/* ── Transport modal ── */
+.tr-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 400;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.tr-box {
+  background: var(--white); border: 1.5px solid var(--border);
+  border-radius: 10px; width: 340px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.12);
+}
+.tr-head {
+  padding: 16px 18px 12px; border-bottom: 1.5px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.tr-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.tr-body  { padding: 16px 18px; }
+.tr-foot  {
+  padding: 12px 18px; border-top: 1.5px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 7px;
+}
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

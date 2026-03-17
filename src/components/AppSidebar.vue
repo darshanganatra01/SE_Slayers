@@ -60,12 +60,12 @@
       <div class="nav-group">
         <div class="nav-group-label">Reports</div>
 
-        <router-link to="/analytics" class="nav-link">
+        <!-- <router-link to="/analytics" class="nav-link">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="1" y="1" width="12" height="12" rx="1"/><path d="M4 9l2-3 2 2 2-4"/>
           </svg>
           Analytics
-        </router-link>
+        </router-link> -->
 
         <router-link to="/finance" class="nav-link">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">

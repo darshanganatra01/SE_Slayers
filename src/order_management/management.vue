@@ -172,9 +172,9 @@ export default {
       this.$refs.toast.show('↕', 'Reordered', 'Priority updated')
     },
 
-    handlePromote({ id, newStatus }) {
+    handlePromote({ id, newStatus, transport }) {
       const old = this.store.findById(id)?.status
-      this.store.promote(id, newStatus)
+      this.store.promote(id, newStatus, transport)
 
       if (newStatus === 'packed') {
         this.$refs.toast.show('📦', `${id} → Packed`, 'Inventory updated')

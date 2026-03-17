@@ -13,15 +13,6 @@
             <label class="fl">Customer Name</label>
             <input class="fi" v-model="form.customer" placeholder="Full name" />
           </div>
-          <div class="fg">
-            <label class="fl">Customer Type</label>
-            <select class="fi" v-model="form.custType">
-              <option value="VIP">👑 VIP</option>
-              <option value="Regular">⭐ Regular</option>
-              <option value="Delayed">⚠ Delayed</option>
-              <option value="New">🆕 New</option>
-            </select>
-          </div>
         </div>
 
         <div class="mo-row">
