@@ -1,8 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import OverviewDashboard from '../order_management/components/overview.vue'
+import OrderManagement   from '../order_management/management.vue'
+import CustomerDashboard from '../order_management/components/customer.vue'
 
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [],
+const routes = [
+  { path: '/',           redirect: '/dashboard' },
+  { path: '/dashboard',  component: OverviewDashboard },
+  { path: '/orders',     component: OrderManagement },
+  { path: '/customers',  component: CustomerDashboard },
+  // add as you build:
+  // { path: '/inventory', component: () => import('../inventory_management/management.vue') },
+  // { path: '/vendors',   component: () => import('../vendor_management/management.vue') },
+]
+
+export default createRouter({
+  history: createWebHistory(),
+  routes
 })
-
-export default router

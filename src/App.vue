@@ -1,11 +1,24 @@
-<script setup></script>
-
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <div class="shell">
+    <AppSidebar :order-count="orderStore.inprocessCount" />
+    <router-view />
+  </div>
 </template>
 
-<style scoped></style>
+<script>
+import AppSidebar from './components/AppSidebar.vue'
+import { useOrderStore } from './order_management/store.js'
+
+export default {
+  name: 'App',
+  components: { AppSidebar },
+  setup() {
+    const orderStore = useOrderStore()
+    return { orderStore }
+  }
+}
+</script>
+
+<style>
+.shell { display: flex; height: 100vh; overflow: hidden; }
+</style>
