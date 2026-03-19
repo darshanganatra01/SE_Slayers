@@ -1,6 +1,9 @@
 <template>
-  <div class="shell">
-    <AppSidebar v-if="!route.meta.hideShell" :order-count="orderStore.inprocessCount" />
+  <template v-if="route.meta.hideShell">
+    <router-view />
+  </template>
+  <div v-else class="shell">
+    <AppSidebar :order-count="orderStore.inprocessCount" />
     <router-view />
   </div>
 </template>

@@ -56,10 +56,23 @@ Two minimal, additive changes were made:
 }
 ```
 
-**2. `src/App.vue`** — added `v-if` to `AppSidebar` and imported `useRoute`:
+**2. `src/App.vue`** — template and script changes:
 ```diff
-- <AppSidebar :order-count="orderStore.inprocessCount" />
-+ <AppSidebar v-if="!route.meta.hideShell" :order-count="orderStore.inprocessCount" />
+- <template>
+-   <div class="shell">
+-     <AppSidebar :order-count="orderStore.inprocessCount" />
+-     <router-view />
+-   </div>
+- </template>
++ <template>
++   <template v-if="route.meta.hideShell">
++     <router-view />
++   </template>
++   <div v-else class="shell">
++     <AppSidebar :order-count="orderStore.inprocessCount" />
++     <router-view />
++   </div>
++ </template>
 
 + import { useRoute } from 'vue-router'
   ...
@@ -70,17 +83,24 @@ Two minimal, additive changes were made:
   }
 ```
 
-**Impact on other team members:** Zero. All existing routes (`/dashboard`, `/orders`, `/customers`, `/inventory`, `/vendors`) do **not** have `meta.hideShell` set, so `hideShell` evaluates to `undefined` (falsy) for them — the sidebar renders exactly as before.
+When `hideShell` is true the entire `.shell` flex wrapper is bypassed, giving the customer dashboard the full viewport. When it is false (all other team routes), the template is identical to the original.
+
+**Impact on other team members:** Zero. All existing routes (`/dashboard`, `/orders`, `/customers`, `/inventory`, `/vendors`) do **not** have `meta.hideShell` set, so they fall into the `v-else` branch — the shell and sidebar render exactly as before.
 
 ---
 
 ### How to Revert This Change
 
-If the sidebar isolation needs to be removed (e.g. if the team decides to merge the storefront into the shared shell):
+**Step 1 — `src/router/index.js`:** Remove the `meta: { hideShell: true },` line from the `/store` route.
 
-**Step 1 — `src/router/index.js`:** Remove `meta: { hideShell: true },` from the `/store` route.
+**Step 2 — `src/App.vue`:** Revert the template back to:
+```html
+<template>
+  <div class="shell">
+    <AppSidebar :order-count="orderStore.inprocessCount" />
+    <router-view />
+  </div>
+</template>
+```
+And remove `import { useRoute } from 'vue-router'`, `const route = useRoute()`, and `route` from the `return` object in `setup()`.
 
-**Step 2 — `src/App.vue`:** Revert these three lines:
-1. Change `<AppSidebar v-if="!route.meta.hideShell" ...` back to `<AppSidebar ...`
-2. Remove `import { useRoute } from 'vue-router'`
-3. Remove `const route = useRoute()` and remove `route` from the `return` object.
