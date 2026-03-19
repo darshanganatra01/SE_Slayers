@@ -83,7 +83,7 @@ const cartStore = useCartStore()
 
 watchEffect(() => {
   if (!authStore.isAuthenticated) {
-    router.replace('/login')
+    router.replace('/store/login')
   } else if (cartStore.items.length === 0) {
     router.replace('/cart')
   }

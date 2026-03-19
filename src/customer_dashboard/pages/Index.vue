@@ -38,7 +38,7 @@ const authStore = useAuthStore()
 
 watchEffect(() => {
   if (!authStore.isAuthenticated) {
-    router.replace('/login')
+    router.replace('/store/login')
   }
 })
 

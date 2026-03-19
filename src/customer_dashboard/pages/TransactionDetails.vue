@@ -96,7 +96,7 @@ const authStore = useAuthStore()
 const coId = computed(() => route.params.coId as string)
 
 if (!authStore.isAuthenticated) {
-  router.replace('/login')
+  router.replace('/store/login')
 }
 
 const orders = getOrdersWithDetails()
