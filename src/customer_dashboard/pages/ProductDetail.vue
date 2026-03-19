@@ -26,10 +26,9 @@
             <Minus class="h-4 w-4" />
           </Button>
           <span class="w-10 text-center text-lg font-semibold">{{ qty }}</span>
-          <Button variant="outline" size="icon" @click="qty = Math.min(data.sku.stockQty, qty + 1)">
+          <Button variant="outline" size="icon" @click="qty++">
             <Plus class="h-4 w-4" />
           </Button>
-          <span class="text-sm text-muted-foreground">({{ data.sku.stockQty }} in stock)</span>
         </div>
 
         <div class="flex gap-3">

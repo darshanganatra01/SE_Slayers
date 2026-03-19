@@ -10,9 +10,6 @@
       <h3 class="text-sm font-semibold text-foreground line-clamp-2">{{ product.pName }}</h3>
       <p class="mt-1 text-xs text-muted-foreground">{{ product.category }}</p>
       <p class="mt-2 text-lg font-bold text-primary">₹{{ productPrice }}</p>
-      <p v-if="sku.stockQty < 10" class="mt-1 text-xs text-destructive">
-        Only {{ sku.stockQty }} left
-      </p>
     </CardContent>
   </Card>
 </template>
