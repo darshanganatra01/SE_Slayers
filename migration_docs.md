@@ -38,6 +38,17 @@ The customer dashboard runs as a nested route under `/store` (e.g. `/store`, `/s
 
 ---
 
+## UI Refinements Applied
+
+1. **Global Zoom (+20%)**: Added `html { font-size: 120%; }` to `src/customer_dashboard/index.css` to scale the UI uniformly. This uses `rem` units to ensure accessibility and layout consistency across the store.
+2. **Order Timeline Fix**: Added the missing `success` color definition to `tailwind.config.js`. This restores the green circles and tracking lines in the order history timeline.
+3. **Hidden Stock Information**: 
+   - Removed the "stock quantity" label from the product detail page.
+   - Removed "Only X left" low-stock warnings from product cards.
+   - Simplified increment logic to remove stock-based caps (since stock is hidden).
+
+---
+
 ## Sidebar Shell Isolation
 
 ### Problem

@@ -85,7 +85,7 @@ watchEffect(() => {
   if (!authStore.isAuthenticated) {
     router.replace('/store/login')
   } else if (cartStore.items.length === 0) {
-    router.replace('/cart')
+    router.replace('/store/cart')
   }
 })
 
