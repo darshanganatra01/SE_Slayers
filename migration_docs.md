@@ -36,3 +36,51 @@ The `SE_Slayers` project natively uses JavaScript, but we introduced `typescript
 
 The customer dashboard runs as a nested route under `/store` (e.g. `/store`, `/store/cart`, `/store/checkout`) to avoid URL path conflicts with other team members' modules.
 
+---
+
+## Sidebar Shell Isolation
+
+### Problem
+The SE_Slayers root `src/App.vue` wraps every route in a fixed sidebar shell (`AppSidebar` + full-height flex container). When the customer dashboard renders under `/store`, it was being squeezed inside this shell, making the storefront unusable.
+
+### Solution Applied
+Two minimal, additive changes were made:
+
+**1. `src/router/index.js`** — added `meta: { hideShell: true }` to the `/store` route:
+```js
+{
+  path: '/store',
+  meta: { hideShell: true },   // ← added
+  component: () => import('../customer_dashboard/App.vue'),
+  children: [ ... ]
+}
+```
+
+**2. `src/App.vue`** — added `v-if` to `AppSidebar` and imported `useRoute`:
+```diff
+- <AppSidebar :order-count="orderStore.inprocessCount" />
++ <AppSidebar v-if="!route.meta.hideShell" :order-count="orderStore.inprocessCount" />
+
++ import { useRoute } from 'vue-router'
+  ...
+  setup() {
+    const orderStore = useOrderStore()
++   const route = useRoute()
++   return { orderStore, route }
+  }
+```
+
+**Impact on other team members:** Zero. All existing routes (`/dashboard`, `/orders`, `/customers`, `/inventory`, `/vendors`) do **not** have `meta.hideShell` set, so `hideShell` evaluates to `undefined` (falsy) for them — the sidebar renders exactly as before.
+
+---
+
+### How to Revert This Change
+
+If the sidebar isolation needs to be removed (e.g. if the team decides to merge the storefront into the shared shell):
+
+**Step 1 — `src/router/index.js`:** Remove `meta: { hideShell: true },` from the `/store` route.
+
+**Step 2 — `src/App.vue`:** Revert these three lines:
+1. Change `<AppSidebar v-if="!route.meta.hideShell" ...` back to `<AppSidebar ...`
+2. Remove `import { useRoute } from 'vue-router'`
+3. Remove `const route = useRoute()` and remove `route` from the `return` object.

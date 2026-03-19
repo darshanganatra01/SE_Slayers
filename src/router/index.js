@@ -14,7 +14,8 @@ const routes = [
   // Customer Dashboard Routes (prefixed with /store to avoid conflict):
   {
     path: '/store',
-    component: () => import('../customer_dashboard/App.vue'), // Or a layout wrapper if exists
+    meta: { hideShell: true },
+    component: () => import('../customer_dashboard/App.vue'),
     children: [
       { path: '', name: 'store-index', component: () => import('../customer_dashboard/pages/Index.vue') },
       { path: 'product/:pid', name: 'store-product', component: () => import('../customer_dashboard/pages/ProductDetail.vue') },
