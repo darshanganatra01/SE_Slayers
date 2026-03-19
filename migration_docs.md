@@ -46,6 +46,7 @@ The customer dashboard runs as a nested route under `/store` (e.g. `/store`, `/s
    - Removed the "stock quantity" label from the product detail page.
    - Removed "Only X left" low-stock warnings from product cards.
    - Simplified increment logic to remove stock-based caps (since stock is hidden).
+4. **Redirect Fix (Checkout)**: Fixed a bug in `Checkout.vue` where clearing the cart after an order would trigger an immediate redirect to an unprefixed `/cart` route. It now correctly redirects to `/store/cart` (or continues to the intended `/store/orders`).
 
 ---
 
