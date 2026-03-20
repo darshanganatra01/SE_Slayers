@@ -15,7 +15,7 @@
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p class="font-semibold text-foreground">
-                {{ items.map(i => i.product.pName).join(', ') }}
+                {{ items.map(i => `${i.product.pName} (${getSpecSize(i.sku.specs)})`).join(', ') }}
               </p>
               <p class="text-sm text-muted-foreground">
                 Order #{{ order.coId }} · {{ order.orderDate }}
@@ -57,6 +57,15 @@ watchEffect(() => {
 })
 
 const orders = getOrdersWithDetails()
+
+const getSpecSize = (specsString: string) => {
+  try {
+    const specs = JSON.parse(specsString)
+    return specs.size || ''
+  } catch (e) {
+    return specsString
+  }
+}
 
 const statusVariant = (status: string): BadgeVariants['variant'] => {
   switch (status) {

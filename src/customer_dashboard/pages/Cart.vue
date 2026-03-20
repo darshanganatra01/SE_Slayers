@@ -12,12 +12,17 @@
     <div class="space-y-3">
       <Card v-for="item in cartStore.items" :key="item.sku.skuId">
         <CardContent class="flex items-center gap-4 p-4">
-          <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-secondary text-3xl">
-            {{ item.product.image }}
+          <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-secondary text-3xl">
+            <template v-if="isImagePath(item.product.image)">
+              <img :src="processPath(item.product.image)" :alt="item.product.pName" class="h-full w-full object-contain p-1" />
+            </template>
+            <template v-else>
+              {{ item.product.image }}
+            </template>
           </div>
           <div class="flex-1 min-w-0">
             <h3 class="font-semibold text-foreground truncate">{{ item.product.pName }}</h3>
-            <p class="text-sm text-muted-foreground">{{ item.sku.specs }}</p>
+            <p class="text-sm text-muted-foreground">{{ formatSpecs(item.sku.specs) }}</p>
           </div>
           <div class="flex items-center gap-2">
             <Button variant="outline" size="icon" class="h-7 w-7" @click="cartStore.updateQuantity(item.sku.skuId, item.quantity - 1)">
@@ -28,9 +33,10 @@
               <Plus class="h-3 w-3" />
             </Button>
           </div>
-          <p class="w-24 text-right font-bold text-primary">
-            ₹{{ (item.sku.currentSell * item.quantity).toLocaleString() }}
-          </p>
+          <div class="w-24 text-right">
+            <p class="font-bold text-primary">₹{{ (item.sku.currentSell * item.quantity).toLocaleString() }}</p>
+            <p class="text-[10px] text-muted-foreground uppercase">₹{{ item.sku.currentSell }} / unit</p>
+          </div>
           <Button variant="ghost" size="icon" class="text-destructive" @click="cartStore.removeItem(item.sku.skuId)">
             <Trash2 class="h-4 w-4" />
           </Button>
@@ -71,4 +77,25 @@ watchEffect(() => {
     router.replace('/store/login')
   }
 })
+
+const isImagePath = (img: string) => {
+  return img.startsWith('@') || img.startsWith('/') || img.includes('.')
+}
+
+const processPath = (path: string) => {
+  if (path.startsWith('@')) {
+    return path.replace('@', '/src')
+  }
+  return path
+}
+
+const formatSpecs = (specsString: string) => {
+  try {
+    const specs = JSON.parse(specsString)
+    return specs.size || specsString
+  } catch (e) {
+    return specsString
+  }
+}
 </script>
+

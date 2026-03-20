@@ -32,7 +32,10 @@
               </thead>
               <tbody class="[&_tr:last-child]:border-0">
                 <tr v-for="item in orderData.items" :key="item.cDetailId" class="border-b transition-colors hover:bg-muted/50">
-                  <td class="p-4 align-middle font-medium">{{ item.product.pName }}</td>
+                  <td class="p-4 align-middle">
+                    <div class="font-medium text-foreground">{{ item.product.pName }}</div>
+                    <div class="text-xs text-muted-foreground">{{ getSpecSize(item.sku.specs) }}</div>
+                  </td>
                   <td class="p-4 align-middle text-center">{{ item.orderedQty }}</td>
                   <td class="p-4 align-middle text-center">{{ item.deliveredQty }}</td>
                   <td class="p-4 align-middle text-right">₹{{ (item.salePrice * item.orderedQty).toLocaleString() }}</td>
@@ -102,4 +105,13 @@ if (!authStore.isAuthenticated) {
 const orders = getOrdersWithDetails()
 const orderData = computed(() => orders.find(o => o.order.coId === coId.value))
 const randomSuffix = Math.floor(Math.random() * 9000 + 1000)
+
+const getSpecSize = (specsString: string) => {
+  try {
+    const specs = JSON.parse(specsString)
+    return specs.size || ''
+  } catch (e) {
+    return specsString
+  }
+}
 </script>
