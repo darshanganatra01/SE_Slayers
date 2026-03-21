@@ -4,11 +4,11 @@
       <div class="flex flex-col items-center">
         <div
           :class="[
-            'flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold',
+            'flex h-[38.4px] w-[38.4px] items-center justify-center rounded-full text-xs font-bold',
             step.completed ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
           ]"
         >
-          <Check v-if="step.completed" class="h-4 w-4" />
+          <Check v-if="step.completed" class="h-[19.2px] w-[19.2px]" />
           <span v-else>{{ i + 1 }}</span>
         </div>
         <span class="mt-1 text-xs font-medium text-foreground">{{ step.label }}</span>
@@ -33,11 +33,6 @@ const props = defineProps<{
 
 const steps = computed(() => [
   { label: 'Order Placed', date: props.orderDate, completed: true },
-  {
-    label: 'Confirmed',
-    date: ['Confirmed', 'Shipped', 'Delivered'].includes(props.status) ? props.orderDate : undefined,
-    completed: ['Confirmed', 'Shipped', 'Delivered'].includes(props.status),
-  },
   {
     label: 'Shipped',
     date: ['Shipped', 'Delivered'].includes(props.status) ? props.orderDate : undefined,

@@ -25,6 +25,11 @@
             <p class="text-sm font-medium uppercase tracking-wider text-primary">{{ data.product.category }}</p>
             <h1 class="text-3xl font-bold tracking-tight text-foreground md:text-4xl">{{ data.product.pName }}</h1>
             <p class="mt-2 text-muted-foreground">Unit: {{ data.product.unitMeasurement }}</p>
+            <div v-if="Object.keys(commonSpecs).length > 0" class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <span v-for="(val, key) in commonSpecs" :key="key" class="text-muted-foreground">
+                <span class="font-semibold text-foreground">{{ key }}:</span> {{ val }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -117,6 +122,33 @@ watchEffect(() => {
 const pid = computed(() => route.params.pid as string)
 const data = computed(() => getProductWithSku(pid.value))
 
+const commonSpecs = computed(() => {
+  if (!data.value || data.value.skus.length === 0) return {}
+  
+  const allSpecs = data.value.skus.map(sku => {
+    try {
+      return JSON.parse(sku.specs)
+    } catch (e) {
+      return {}
+    }
+  })
+
+  if (allSpecs.length === 0) return {}
+  
+  const common: Record<string, any> = {}
+  const keys = Object.keys(allSpecs[0])
+
+  keys.forEach(key => {
+    const value = allSpecs[0][key]
+    const isCommon = allSpecs.every(s => s[key] === value)
+    if (isCommon) {
+      common[key] = value
+    }
+  })
+
+  return common
+})
+
 const isImagePath = computed(() => {
   const img = data.value?.product.image
   return img && (img.startsWith('@') || img.startsWith('/') || img.includes('.'))
@@ -163,7 +195,24 @@ const formatSpecs = (specsString: string) => {
   try {
     const specs = JSON.parse(specsString)
     const { size, ...other } = specs
-    return { size: size || 'Standard', other: Object.keys(other).length > 0 ? other : null }
+    
+    const filteredOther: Record<string, any> = {}
+    Object.keys(other).forEach(key => {
+      // Only include in 'other' if it's not a common spec
+      if (!commonSpecs.value[key]) {
+        filteredOther[key] = other[key]
+      }
+    })
+
+    // If size is common, we might want to display it as 'Standard' or hide it, 
+    // but usually size is the differentiator. 
+    // If it IS common, we'll mark it as such.
+    const displaySize = commonSpecs.value.size ? 'Standard' : (size || 'Standard')
+
+    return { 
+      size: displaySize, 
+      other: Object.keys(filteredOther).length > 0 ? filteredOther : null 
+    }
   } catch (e) {
     return { size: specsString, other: null }
   }

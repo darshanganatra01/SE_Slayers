@@ -11,7 +11,7 @@
       <p class="mb-6 text-sm text-muted-foreground">Placed on {{ orderData.order.orderDate }}</p>
 
       <Card class="mb-6">
-        <CardHeader><CardTitle>Order Timeline</CardTitle></CardHeader>
+        <CardHeader><CardTitle class="text-[21.6px]">Order Timeline</CardTitle></CardHeader>
         <CardContent>
           <OrderTimeline :status="orderData.order.status" :orderDate="orderData.order.orderDate" />
         </CardContent>
