@@ -105,7 +105,7 @@
                   </svg>
                   <div class="big-ring-score">
                     <div class="num" :style="{ color: scoreColor(typeScore(selectedCustomer.type)) }">{{ typeScore(selectedCustomer.type) }}</div>
-                    <div class="lbl">score</div>
+                    <div class="lbl">ACP</div>
                   </div>
                 </div>
                 <div class="dp-head-info">
@@ -156,6 +156,7 @@
                   <div class="inv-due" :class="inv.status === 'overdue' ? 'overdue' : inv.status === 'pending' ? 'due-soon' : 'ok'">
                     {{ inv.status === 'overdue' ? '⚠ OVERDUE' : inv.status === 'pending' ? 'Due ' + inv.due : 'Paid' }}
                   </div>
+                  <button class="inv-dl-btn" @click="downloadCustomerInvoice(inv, selectedCustomer)">Download Invoice</button>
                 </div>
               </div>
 
@@ -194,7 +195,7 @@
               </div>
               <div style="text-align:right">
                 <div class="lc-score" :style="{ color: scoreColor(typeScore(c.type)) }">{{ typeScore(c.type) }}</div>
-                <div style="font-size:9.5px;color:var(--ink-4)">score</div>
+                <div style="font-size:9.5px;color:var(--ink-4)">ACP</div>
               </div>
             </div>
             <div class="lc-body">
@@ -276,7 +277,7 @@ export default {
       sortOptions: [
         { key:'name',    label:'Name'      },
         { key:'pending', label:'Pending ↓' },
-        { key:'score',   label:'Score ↓'   }
+        { key:'score',   label:'ACP ↓'   }
       ],
       customers: [
         { id:'CST-001', name:'Arjun Mehta',  biz:'Mehta Garage',     phone:'+91 98401 11111', email:'arjun@mehta.com',  loc:'Chennai',    type:'Platinum', credit:300000, pending:12400, totalOrders:28, totalValue:520000, avgPayDays:0,
@@ -355,6 +356,39 @@ export default {
         this.$refs.toast.show('✓','Customer added',this.form.biz)
       }
       this.showModal=false; this.editingId=null
+    },
+    downloadCustomerInvoice(inv, customer) {
+      const html = `<!DOCTYPE html>
+    <html><head><meta charset="UTF-8"/>
+    <style>
+      body { font-family: sans-serif; color: #09090b; padding: 40px; max-width: 600px; margin: auto; }
+      h1   { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+      .meta { font-size: 12px; color: #71717a; margin-bottom: 24px; }
+      .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e4e4e7; font-size: 13px; }
+      .label { color: #71717a; }
+      .total { text-align: right; margin-top: 20px; font-size: 18px; font-weight: 700; }
+      .status { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+        background: ${inv.status === 'paid' ? '#dcfce7' : inv.status === 'overdue' ? '#fee2e2' : '#fef3c7'};
+        color: ${inv.status === 'paid' ? '#16a34a' : inv.status === 'overdue' ? '#dc2626' : '#d97706'}; }
+    </style>
+    </head><body>
+      <h1>Invoice</h1>
+      <div class="meta">${inv.id} · Generated ${new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}</div>
+      <div class="row"><span class="label">Bill To</span><span>${customer.biz}</span></div>
+      <div class="row"><span class="label">Location</span><span>${customer.loc}</span></div>
+      <div class="row"><span class="label">Description</span><span>${inv.desc}</span></div>
+      <div class="row"><span class="label">Due Date</span><span>${inv.due || '—'}</span></div>
+      <div class="row"><span class="label">Status</span><span class="status">${inv.status.toUpperCase()}</span></div>
+      <div class="total">Amount: ${this.fmtINR(inv.amount)}</div>
+    </body></html>`
+
+      const blob = new Blob([html], { type: 'text/html' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${inv.id}-${customer.biz.replace(/\s+/g, '-')}.html`
+      a.click()
+      URL.revokeObjectURL(url)
     }
   }
 }
@@ -535,4 +569,11 @@ export default {
 /* ── Animations ── */
 @keyframes fadeUp  { from { opacity: 0; transform: translateY(5px);  } to { opacity: 1; transform: translateY(0);  } }
 @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+
+.inv-dl-btn {
+  background: none; border: 1.5px solid var(--border); border-radius: 5px;
+  padding: 2px 8px; font-size: 11px; cursor: pointer; color: var(--blue);
+  font-family: 'Geist', sans-serif; transition: all 0.12s; flex-shrink: 0;
+}
+.inv-dl-btn:hover { background: var(--blue-dim); border-color: var(--blue); }
 </style>

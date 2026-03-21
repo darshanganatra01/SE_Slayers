@@ -2,15 +2,7 @@
   <aside class="sidebar">
 
     <div class="logo">
-      <div class="logo-mark">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <rect x="1" y="1" width="5" height="5" rx="1" fill="white"/>
-          <rect x="8" y="1" width="5" height="5" rx="1" fill="white" opacity=".6"/>
-          <rect x="1" y="8" width="5" height="5" rx="1" fill="white" opacity=".6"/>
-          <rect x="8" y="8" width="5" height="5" rx="1" fill="white" opacity=".3"/>
-        </svg>
-      </div>
-      <span class="logo-name">VendorOS</span>
+      <img src="/metro-removebg-preview.png" style="width:160px; height:auto; object-fit:contain; display:block; margin-top:-30px; margin-bottom:-30px;"/>
     </div>
 
     <nav>
@@ -57,23 +49,7 @@
         </router-link>
       </div>
 
-      <div class="nav-group">
-        <div class="nav-group-label">Reports</div>
 
-        <!-- <router-link to="/analytics" class="nav-link">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="1" y="1" width="12" height="12" rx="1"/><path d="M4 9l2-3 2 2 2-4"/>
-          </svg>
-          Analytics
-        </router-link> -->
-
-        <router-link to="/finance" class="nav-link">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M7 1v12M1 7h12"/>
-          </svg>
-          Finance
-        </router-link>
-      </div>
     </nav>
 
     <div class="sidebar-bottom">
@@ -114,13 +90,15 @@ export default {
   display: flex; flex-direction: column;
 }
 .logo {
-  padding: 18px 16px 16px;
+  padding: 12px 16px;
   border-bottom: 1.5px solid var(--border);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
 }
 .logo-mark {
-  width: 26px; height: 26px; background: var(--blue); border-radius: 6px;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 60px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden; background: transparent;
 }
 .logo-name { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.3px; }
 
