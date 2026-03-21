@@ -2,14 +2,12 @@
   <header v-if="authStore.isAuthenticated" class="sticky top-0 z-50 border-b bg-card">
     <div class="container flex h-14 items-center justify-between">
       <RouterLink to="/store" class="flex items-center gap-2 text-lg font-bold text-primary">
-        <img src="https://placehold.co/32?text=MH" alt="Metro Hardware Logo" class="h-8 w-8 rounded-md" />
-        Metro Hardware
+        <div class="logo">
+          <img src="/metro-removebg-preview.png" style="width:160px; height:auto; object-fit:contain; display:block; margin-top:-30px; margin-bottom:-30px;"/>
+        </div>
       </RouterLink>
 
       <div class="flex items-center gap-2">
-        <span class="hidden text-sm text-muted-foreground sm:inline">
-          Welcome back, <strong class="text-foreground">{{ authStore.user?.name }}</strong>
-        </span>
 
         <Button variant="ghost" size="sm" as-child>
           <RouterLink to="/store/orders">
