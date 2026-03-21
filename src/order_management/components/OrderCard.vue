@@ -23,18 +23,19 @@
       <div class="items-wrap">
         <div v-for="(it, i) in order.items" :key="i" class="irow">
           <span class="irow-name">{{ it.name }}</span>
-          <span class="irow-qty">Qty: {{ it.qty || 1 }}</span>
+          <span class="irow-qty">
+            <span v-if="it.originalQty && it.qty !== it.originalQty">
+              {{ it.qty }}/{{ it.originalQty }}
+            </span>
+            <span v-else>{{ it.qty || 1 }}</span>
+          </span>
         </div>
       </div>
     </div>
 
-    <div v-if="order.status === 'packed'" class="oc-extra">
-      <span>📦 {{ order.packages || 1 }} pkg</span>
-      <span>{{ order.packagingCost || '—' }}</span>
-    </div>
     <div v-if="order.status === 'shipped'" class="oc-extra">
       <span>🚚 {{ order.transport || '—' }}</span>
-      <span>{{ order.shippingCost || '—' }}</span>
+      <button class="dl-invoice-btn" @click.stop="downloadInvoice(order)">Download Invoice</button>
     </div>
 
     <div class="oc-foot">
@@ -87,6 +88,50 @@ export default {
       this.$emit('reorder', { toId: this.order.id, pos: e.clientY < mid ? 'before' : 'after' })
       this.dragOverTop = false
       this.dragOverBottom = false
+    },
+// ADD inside methods: {}
+    downloadInvoice(order) {
+      const lines = order.items.map(it =>
+        `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7">${it.name}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;text-align:center">${it.qty || 1}</td>
+        </tr>`
+      ).join('')
+
+      const html = `<!DOCTYPE html>
+    <html><head><meta charset="UTF-8"/>
+    <style>
+      body{font-family:sans-serif;color:#09090b;padding:40px;max-width:600px;margin:auto}
+      h1{font-size:22px;font-weight:700;margin-bottom:4px}
+      .meta{font-size:12px;color:#71717a;margin-bottom:24px}
+      .label{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#a1a1aa;margin-bottom:6px}
+      .val{font-size:14px;font-weight:500}
+      .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e4e4e7;font-size:13px}
+      table{width:100%;border-collapse:collapse;margin-top:8px}
+      th{padding:8px 12px;background:#f7f7f8;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#a1a1aa;text-align:left;border-bottom:1.5px solid #e4e4e7}
+      .total{text-align:right;margin-top:16px;font-size:16px;font-weight:700}
+    </style>
+    </head><body>
+      <h1>Invoice</h1>
+      <div class="meta">${order.id} · Generated ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+      <div class="row"><span style="color:#71717a">Customer</span><span>${order.customer}</span></div>
+      <div class="row"><span style="color:#71717a">Shop</span><span>${order.shop}</span></div>
+      <div class="row"><span style="color:#71717a">Placed On</span><span>${order.placedOn}</span></div>
+      <div class="row"><span style="color:#71717a">Carrier</span><span>${order.transport || '—'}</span></div>
+      <table>
+        <thead><tr><th>Item</th><th style="text-align:center">Qty</th></tr></thead>
+        <tbody>${lines}</tbody>
+      </table>
+      <div class="total">Total: ${order.value}</div>
+    </body></html>`
+
+      const blob = new Blob([html], { type: 'text/html' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `Invoice-${order.id}.html`
+      a.click()
+      URL.revokeObjectURL(url)
     }
   }
 }
@@ -159,4 +204,12 @@ export default {
   transition: opacity 0.12s; cursor: grab; padding: 3px;
 }
 .ocard:hover .drag-handle { opacity: 0.5; }
+
+/* ADD at bottom of <style scoped> */
+.dl-invoice-btn {
+  background: none; border: 1.5px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; font-size: 10.5px; font-weight: 600; color: var(--blue);
+  cursor: pointer; font-family: 'Geist', sans-serif; transition: all 0.12s;
+}
+.dl-invoice-btn:hover { background: var(--blue-dim); border-color: var(--blue); }
 </style>

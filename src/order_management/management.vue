@@ -145,6 +145,9 @@ export default {
       return this.selectedId ? this.store.findById(this.selectedId) : null
     },
     visibleOrders() {
+      // Touch items deeply so qty changes trigger re-render
+      this.store.orders.forEach(o => o.items.forEach(it => it.qty))
+      
       let list = this.store.byStatus(this.activeStatus)
       if (this.searchQ) {
         const q = this.searchQ.toLowerCase()
@@ -172,18 +175,17 @@ export default {
       this.$refs.toast.show('↕', 'Reordered', 'Priority updated')
     },
 
-    handlePromote({ id, newStatus, transport }) {
-      const old = this.store.findById(id)?.status
-      this.store.promote(id, newStatus, transport)
+// In management.vue — replace handlePromote with this:
 
+    handlePromote({ id, newStatus, transport, updatedItems }) {
+      this.store.promote(id, newStatus, transport, updatedItems)
       if (newStatus === 'packed') {
-        this.$refs.toast.show('📦', `${id} → Packed`, 'Inventory updated')
+        this.$refs.toast.show('📦', `${id} → Packed`, 'Quantities confirmed')
       } else if (newStatus === 'shipped') {
-        this.$refs.toast.show('🚚', `${id} → Shipped`, 'BlueDart Express')
+        this.$refs.toast.show('🚚', `${id} → Shipped`, transport || 'BlueDart Express')
       } else {
         this.$refs.toast.show('↩', `${id} moved back`, SL[newStatus])
       }
-
       this.activeStatus = newStatus
     },
 

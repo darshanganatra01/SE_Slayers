@@ -31,8 +31,11 @@ export const useOrderStore = defineStore('orders', {
   }),
 
   getters: {
-    byStatus: (state) => (status) =>
-      state.orders.filter(o => o.status === status).sort((a, b) => a.order - b.order),
+    byStatus: (state) => (status) => {
+      // Access orders deeply so Pinia tracks nested changes
+      state.orders.forEach(o => o.items.forEach(it => it.qty))
+      return state.orders.filter(o => o.status === status).sort((a, b) => a.order - b.order)
+    },
 
     inprocessCount: (state) =>
       state.orders.filter(o => o.status === 'inprocess').length,
@@ -43,25 +46,40 @@ export const useOrderStore = defineStore('orders', {
   },
 
   actions: {
-    promote(id, newStatus, transport) {
+// In store.js — replace your promote action with this:
+
+    promote(id, newStatus, transport, updatedItems) {
       const o = this.orders.find(x => x.id === id)
       if (!o) return
       const old = o.status
       o.status = newStatus
-      o.order = this.orders.filter(x => x.status === newStatus).length - 1
+      o.order  = this.orders.filter(x => x.status === newStatus).length - 1
 
       if (newStatus === 'packed' && old === 'inprocess') {
+        // Apply updated quantities from the packing modal
+        if (updatedItems && updatedItems.length) {
+          const newItems = o.items.map(it => {
+            const updated = updatedItems.find(u => u.name === it.name)
+            if (updated) {
+              return { ...it, originalQty: it.qty || 1, qty: updated.qty }
+            }
+            return it
+          })
+          o.items.splice(0, o.items.length, ...newItems)
+        }
+        // Update inventory
         o.items.forEach(it => {
           if (it.inStock && this.inventory[it.name]) {
-            this.inventory[it.name].stock = Math.max(0, this.inventory[it.name].stock - 1)
+            this.inventory[it.name].stock = Math.max(0, this.inventory[it.name].stock - (it.qty || 1))
             it.inStock = this.inventory[it.name].stock > 0
           }
         })
-        if (!o.packages) o.packages = Math.ceil(o.items.length / 2)
+        if (!o.packages)      o.packages      = Math.ceil(o.items.length / 2)
         if (!o.packagingCost) o.packagingCost = '₹' + (o.packages * 150)
+
       } else if (newStatus === 'shipped') {
-        o.transport = transport || 'BlueDart Express'
-        if (!o.shippingCost) o.shippingCost = '₹' + (Math.floor(Math.random() * 400) + 300)
+        o.transport   = transport || 'BlueDart Express'
+        o.shippingCost = '₹' + (Math.floor(Math.random() * 400) + 300)
       }
     },
 
