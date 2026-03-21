@@ -1,8 +1,9 @@
 <template>
   <header v-if="authStore.isAuthenticated" class="sticky top-0 z-50 border-b bg-card">
     <div class="container flex h-14 items-center justify-between">
-      <RouterLink to="/store" class="text-lg font-bold text-primary">
-        🔧 HardwareHub
+      <RouterLink to="/store" class="flex items-center gap-2 text-lg font-bold text-primary">
+        <img src="https://placehold.co/32?text=MH" alt="Metro Hardware Logo" class="h-8 w-8 rounded-md" />
+        Metro Hardware
       </RouterLink>
 
       <div class="flex items-center gap-2">

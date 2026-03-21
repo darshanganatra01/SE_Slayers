@@ -2,7 +2,7 @@
   <div class="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-secondary p-4">
     <Card class="w-full max-w-md">
       <CardHeader class="text-center">
-        <CardTitle class="text-2xl">🔧 HardwareHub</CardTitle>
+        <CardTitle class="text-2xl">🏢 Metro Hardware</CardTitle>
         <CardDescription>Sign in to your account</CardDescription>
       </CardHeader>
       <CardContent>
