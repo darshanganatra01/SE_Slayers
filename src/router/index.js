@@ -8,8 +8,7 @@ const routes = [
   { path: '/dashboard',  component: OverviewDashboard },
   { path: '/orders',     component: OrderManagement },
   { path: '/customers',  component: CustomerDashboard },
-  // add as you build:
-  // { path: '/inventory', component: () => import('../inventory_management/management.vue') },
+  { path: '/inventory', component: () => import('../inventory_management/inventory.vue') },
   // { path: '/vendors',   component: () => import('../vendor_management/management.vue') },
   // Customer Dashboard Routes (prefixed with /store to avoid conflict):
   {
