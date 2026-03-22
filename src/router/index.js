@@ -5,16 +5,13 @@ import CustomerDashboard from '../order_management/components/customer.vue'
 import VendorManagement  from '../vendor_management/management.vue'
 
 const routes = [
-  { path: '/',           redirect: '/dashboard' },
+  { path: '/',       meta: { hideShell: true }, component: () => import('../pages/LandingPage.vue') },
+  { path: '/login',  meta: { hideShell: true }, component: () => import('../pages/LoginPage.vue') },
   { path: '/dashboard',  component: OverviewDashboard },
   { path: '/orders',     component: OrderManagement },
   { path: '/customers',  component: CustomerDashboard },
   { path: '/vendors',    component: VendorManagement },
-  // add as you build:
-  // { path: '/inventory', component: () => import('../inventory_management/management.vue') },
   { path: '/inventory', component: () => import('../inventory_management/inventory.vue') },
-  // { path: '/vendors',   component: () => import('../vendor_management/management.vue') },
-  // Customer Dashboard Routes (prefixed with /store to avoid conflict):
   {
     path: '/store',
     meta: { hideShell: true },
