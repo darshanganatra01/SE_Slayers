@@ -39,7 +39,6 @@
         </div>
       </div>
 
-      <!-- Stock table (visible when tab is NOT portfolio) -->
       <StockTable
         v-if="curTab !== 'portfolio'"
         :parts="store.parts"
@@ -48,14 +47,12 @@
         @go-vendor="goVendor"
       />
 
-      <!-- Portfolio table (visible only on portfolio tab) -->
       <PortfolioTable
         v-if="curTab === 'portfolio'"
         :products="store.portfolioProducts"
         @open-profit="openProfit"
       />
 
-      <!-- Bottom panels (hidden on portfolio tab) -->
       <div v-if="curTab !== 'portfolio'" class="inv-bottom-grid">
         <PendingArrivals
           :orders="store.pendingOrders"
@@ -68,7 +65,6 @@
 
     </div>
 
-    <!-- Profit popup overlay -->
     <ProfitPopup
       :visible="showProfitPopup"
       :data="profitData"
@@ -76,14 +72,12 @@
       @go-vendor="goVendor"
     />
 
-    <!-- Add part modal -->
     <AddPartModal
       :visible="showAddModal"
       @close="showAddModal = false"
       @submit="handleAddPart"
     />
 
-    <!-- Toast -->
     <AppToast ref="toast" />
 
   </main>
@@ -178,7 +172,6 @@ export default {
   gap: 14px;
 }
 
-/* Tabs */
 .inv-tabs {
   display: flex;
   border-bottom: 1.5px solid var(--border);
@@ -208,7 +201,6 @@ export default {
   color: var(--blue);
 }
 
-/* Bottom grid */
 .inv-bottom-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
