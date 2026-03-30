@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@cd/*": ["./src/customer_dashboard/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}
