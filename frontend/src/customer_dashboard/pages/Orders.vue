@@ -36,9 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
 import { getOrdersWithDetails } from '@cd/data/mockData'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
@@ -48,13 +46,6 @@ import { FileText } from 'lucide-vue-next'
 import type { BadgeVariants } from '@cd/components/ui/Badge.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
-
-watchEffect(() => {
-  if (!authStore.isAuthenticated) {
-    router.replace('/store/login')
-  }
-})
 
 const orders = getOrdersWithDetails()
 

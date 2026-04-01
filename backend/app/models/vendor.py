@@ -22,7 +22,7 @@ class Vendor(db.Model):
 
 
 class VendorProduct(db.Model):
-    """Maps which vendor sells which product (bridge table)."""
+    """Maps which vendor sells which product, with one or more SKU variants."""
 
     __tablename__ = "vendor_products"
 
@@ -33,7 +33,7 @@ class VendorProduct(db.Model):
     # ── Relationships ─────────────────────────────────────────────
     vendor  = db.relationship("Vendor",  back_populates="vendor_products")
     product = db.relationship("Product", back_populates="vendor_products")
-    sku     = db.relationship("SKU",     back_populates="vendor_product", uselist=False)
+    skus    = db.relationship("SKU",     back_populates="vendor_product", lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<VendorProduct {self.vpid}>"

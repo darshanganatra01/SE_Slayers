@@ -16,7 +16,7 @@ class Customer(db.Model):
     email         = db.Column(db.String)
 
     # ── Relationships ─────────────────────────────────────────────
-    user   = db.relationship("User",          back_populates="customers")
+    user   = db.relationship("User",          back_populates="customer_profile")
     orders = db.relationship("CustomerOrder", back_populates="customer", lazy="dynamic")
 
     def __repr__(self) -> str:

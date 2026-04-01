@@ -4,7 +4,7 @@ from app import db
 class SKU(db.Model):
     """Physical stock unit in godown.
 
-    One VendorProduct maps to exactly one SKU.
+    A VendorProduct may have multiple SKU variants.
     """
 
     __tablename__ = "skus"
@@ -22,7 +22,7 @@ class SKU(db.Model):
     threshold             = db.Column(db.Integer)        # Reorder level
 
     # ── Relationships ─────────────────────────────────────────────
-    vendor_product          = db.relationship("VendorProduct",       back_populates="sku")
+    vendor_product          = db.relationship("VendorProduct",       back_populates="skus")
     vendor_order_details    = db.relationship("VendorOrderDetail",   back_populates="sku", lazy="dynamic")
     vendor_invoice_details  = db.relationship("VendorInvoiceDetail", back_populates="sku", lazy="dynamic")
     vendor_return_details   = db.relationship("VendorReturnDetail",  back_populates="sku", lazy="dynamic")

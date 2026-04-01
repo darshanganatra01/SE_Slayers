@@ -66,7 +66,6 @@
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
 import { useCartStore } from '@cd/stores/cart'
 import { mockAddresses } from '@cd/data/mockData'
 import Button from '@cd/components/ui/Button.vue'
@@ -78,13 +77,10 @@ import RadioGroupItem from '@cd/components/ui/RadioGroupItem.vue'
 import Label from '@cd/components/ui/Label.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const cartStore = useCartStore()
 
 watchEffect(() => {
-  if (!authStore.isAuthenticated) {
-    router.replace('/store/login')
-  } else if (cartStore.items.length === 0) {
+  if (cartStore.items.length === 0) {
     router.replace('/store/cart')
   }
 })

@@ -81,7 +81,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
 import { getOrdersWithDetails } from '@cd/data/mockData'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
@@ -94,13 +93,8 @@ import { FileText, Truck } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
 const coId = computed(() => route.params.coId as string)
-
-if (!authStore.isAuthenticated) {
-  router.replace('/store/login')
-}
 
 const orders = getOrdersWithDetails()
 const orderData = computed(() => orders.find(o => o.order.coId === coId.value))

@@ -2,28 +2,35 @@
   <div class="flex min-h-screen items-center justify-center bg-secondary p-4">
     <Card class="w-full max-w-md">
       <CardHeader class="text-center">
-        <CardTitle class="text-2xl">🏢 Metro Hardware</CardTitle>
-        <CardDescription>Create a new account</CardDescription>
+        <CardTitle class="text-2xl">Metro Hardware</CardTitle>
+        <CardDescription>Create your customer account</CardDescription>
       </CardHeader>
       <CardContent>
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <div class="space-y-2">
             <Label for="name">Full Name</Label>
-            <Input id="name" placeholder="John Doe" v-model="name" required />
+            <Input id="name" placeholder="John Doe" v-model="fullName" required />
           </div>
           <div class="space-y-2">
             <Label for="email">Email</Label>
             <Input id="email" type="email" placeholder="you@example.com" v-model="email" required />
           </div>
           <div class="space-y-2">
+            <Label for="contact">Contact Number</Label>
+            <Input id="contact" placeholder="Optional" v-model="contact" />
+          </div>
+          <div class="space-y-2">
             <Label for="password">Password</Label>
             <Input id="password" type="password" placeholder="••••••••" v-model="password" required />
+          </div>
+          <div v-if="errorMessage" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ errorMessage }}
           </div>
           <Button type="submit" class="w-full">Create Account</Button>
         </form>
         <p class="mt-4 text-center text-sm text-muted-foreground">
           Already have an account?
-          <RouterLink to="/store/login" class="font-medium text-primary underline">
+          <RouterLink to="/login" class="font-medium text-primary underline">
             Sign in
           </RouterLink>
         </p>
@@ -35,7 +42,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
+import { useAuthStore } from '@/stores/auth'
 import Button from '@cd/components/ui/Button.vue'
 import Input from '@cd/components/ui/Input.vue'
 import Card from '@cd/components/ui/Card.vue'
@@ -45,15 +52,27 @@ import CardContent from '@cd/components/ui/CardContent.vue'
 import CardDescription from '@cd/components/ui/CardDescription.vue'
 import Label from '@cd/components/ui/Label.vue'
 
-const name = ref('')
+const fullName = ref('')
 const email = ref('')
+const contact = ref('')
 const password = ref('')
+const errorMessage = ref('')
 const authStore = useAuthStore()
 const router = useRouter()
 
-const handleSubmit = () => {
-  if (authStore.register(name.value, email.value, password.value)) {
-    router.push('/store')
+const handleSubmit = async () => {
+  errorMessage.value = ''
+
+  try {
+    await authStore.register({
+      full_name: fullName.value,
+      email: email.value,
+      password: password.value,
+      contact: contact.value || null,
+    })
+    router.replace('/store')
+  } catch (error: any) {
+    errorMessage.value = error.message || 'Unable to create your account right now.'
   }
 }
 </script>

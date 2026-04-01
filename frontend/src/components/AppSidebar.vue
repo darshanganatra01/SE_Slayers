@@ -1,6 +1,5 @@
 <template>
   <aside class="sidebar">
-
     <div class="logo">
       <img src="/metro-removebg-preview.png" style="width:160px; height:auto; object-fit:contain; display:block; margin-top:-30px; margin-bottom:-30px;"/>
     </div>
@@ -55,30 +54,33 @@
     <div class="sidebar-bottom">
       <div class="user-av">{{ userInitials }}</div>
       <div>
-        <div class="user-name">{{ user.name }}</div>
-        <div class="user-role">{{ user.role }}</div>
+        <div class="user-name">{{ displayName }}</div>
+        <div class="user-role">{{ displayRole }}</div>
       </div>
+      <button class="logout-btn" type="button" @click="handleLogout">Log out</button>
     </div>
-
   </aside>
 </template>
 
-<script>
-export default {
-  name: 'AppSidebar',
-  props: {
-    orderCount: { type: Number, default: 0 }
-  },
-  data() {
-    return {
-      user: { name: 'Raj Kumar', role: 'Admin' }
-    }
-  },
-  computed: {
-    userInitials() {
-      return this.user.name.split(' ').map(n => n[0]).join('')
-    }
-  }
+<script setup>
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+defineProps({
+  orderCount: { type: Number, default: 0 }
+})
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const displayName = computed(() => authStore.user?.full_name || 'Business Owner')
+const displayRole = computed(() => authStore.user?.role === 'admin' ? 'Business Owner' : 'Customer')
+const userInitials = computed(() => displayName.value.split(' ').map((part) => part[0]).join(''))
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push('/login')
 }
 </script>
 
@@ -144,4 +146,13 @@ nav { padding: 8px; flex: 1; }
 }
 .user-name { font-size: 12.5px; font-weight: 500; color: var(--ink); }
 .user-role { font-size: 10.5px; color: var(--ink-4); }
+.logout-btn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
 </style>
