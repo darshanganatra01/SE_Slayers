@@ -1,5 +1,5 @@
 <template>
-  <header v-if="authStore.isAuthenticated" class="sticky top-0 z-50 border-b bg-card">
+  <header class="sticky top-0 z-50 border-b bg-card">
     <div class="container flex h-14 items-center justify-between">
       <RouterLink to="/store" class="flex items-center gap-2 text-lg font-bold text-primary">
         <div class="logo">
@@ -8,15 +8,7 @@
       </RouterLink>
 
       <div class="flex items-center gap-2">
-
         <Button variant="ghost" size="sm" as-child>
-          <RouterLink to="/store/orders">
-            <Package class="mr-1 h-4 w-4" />
-            Orders
-          </RouterLink>
-        </Button>
-
-        <Button variant="ghost" size="sm" class="relative" as-child>
           <RouterLink to="/store/cart">
             <ShoppingCart class="mr-1 h-4 w-4" />
             Cart
@@ -29,9 +21,26 @@
           </RouterLink>
         </Button>
 
-        <Button variant="ghost" size="icon" @click="handleLogout" title="Logout">
-          <LogOut class="h-4 w-4" />
+        <template v-if="authStore.isAuthenticated">
+          <Button variant="ghost" size="sm" as-child>
+          <RouterLink to="/store/orders">
+            <Package class="mr-1 h-4 w-4" />
+            Orders
+          </RouterLink>
         </Button>
+          <Button variant="ghost" size="icon" @click="handleLogout" title="Logout">
+            <LogOut class="h-4 w-4" />
+          </Button>
+        </template>
+
+        <template v-else>
+          <Button variant="outline" size="sm" as-child>
+            <RouterLink to="/login">Sign In</RouterLink>
+          </Button>
+          <Button size="sm" as-child>
+            <RouterLink to="/store/register">Register</RouterLink>
+          </Button>
+        </template>
       </div>
     </div>
   </header>
@@ -40,7 +49,7 @@
 <script setup lang="ts">
 import { RouterLink, useRouter } from 'vue-router'
 import { ShoppingCart, Package, LogOut } from 'lucide-vue-next'
-import { useAuthStore } from '@cd/stores/auth'
+import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@cd/stores/cart'
 import Button from '@cd/components/ui/Button.vue'
 
@@ -50,6 +59,6 @@ const router = useRouter()
 
 const handleLogout = () => {
   authStore.logout()
-  router.push('/store/login')
+  router.push('/login')
 }
 </script>

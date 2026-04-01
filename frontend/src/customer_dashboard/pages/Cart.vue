@@ -59,9 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
 import { useCartStore } from '@cd/stores/cart'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
@@ -69,14 +67,7 @@ import CardContent from '@cd/components/ui/CardContent.vue'
 import { Minus, Plus, Trash2 } from 'lucide-vue-next'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const cartStore = useCartStore()
-
-watchEffect(() => {
-  if (!authStore.isAuthenticated) {
-    router.replace('/store/login')
-  }
-})
 
 const isImagePath = (img: string) => {
   return img.startsWith('@') || img.startsWith('/') || img.includes('.')
@@ -98,4 +89,3 @@ const formatSpecs = (specsString: string) => {
   }
 }
 </script>
-

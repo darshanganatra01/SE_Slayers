@@ -1,32 +1,28 @@
 <template>
   <div class="login-root">
-    <!-- Same light background blobs -->
     <div class="bg-blob blob-1"></div>
     <div class="bg-blob blob-2"></div>
     <div class="bg-dots"></div>
 
-    <!-- Login card -->
     <div class="login-card">
-      <!-- Back button -->
-      <button class="back-btn" @click="goBack">
+      <button class="back-btn" type="button" @click="goBack">
         <svg viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
         </svg>
         <span>Back</span>
       </button>
 
-      <!-- Header -->
       <div class="card-header">
         <div class="card-logo">
           <img src="/metro-removebg-preview.png" alt="Metro" class="card-logo-img" />
         </div>
-        <h1 class="card-title">Welcome back</h1>
-        <p class="card-subtitle">Sign in to the Sales Agency dashboard</p>
+        <h1 class="card-title">Sign in once, go where you belong</h1>
+        <p class="card-subtitle">
+          Business owners land in the main app. Customers land in the store automatically.
+        </p>
       </div>
 
-      <!-- Form -->
       <form class="login-form" @submit.prevent="handleLogin" novalidate>
-        <!-- Email -->
         <div class="form-group" :class="{ 'has-error': errors.email }">
           <label class="form-label" for="login-email">Email address</label>
           <div class="input-wrap">
@@ -39,7 +35,7 @@
               v-model="form.email"
               type="email"
               class="form-input"
-              placeholder="you@company.com"
+              placeholder="you@example.com"
               autocomplete="email"
               @input="clearError('email')"
             />
@@ -47,7 +43,6 @@
           <span v-if="errors.email" class="error-msg">{{ errors.email }}</span>
         </div>
 
-        <!-- Password -->
         <div class="form-group" :class="{ 'has-error': errors.password }">
           <label class="form-label" for="login-password">Password</label>
           <div class="input-wrap">
@@ -77,7 +72,6 @@
           <span v-if="errors.password" class="error-msg">{{ errors.password }}</span>
         </div>
 
-        <!-- General error -->
         <div v-if="errors.general" class="general-error">
           <svg viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
@@ -85,7 +79,6 @@
           {{ errors.general }}
         </div>
 
-        <!-- Submit -->
         <button type="submit" class="submit-btn" :class="{ loading: isLoading }" :disabled="isLoading">
           <span v-if="!isLoading">Sign In</span>
           <span v-else class="spinner-wrap">
@@ -95,46 +88,87 @@
         </button>
       </form>
 
-      <p class="card-note">Authorized personnel only. Unauthorized access is prohibited.</p>
+      <p class="register-copy">
+        New customer?
+        <RouterLink to="/store/register">Create an account</RouterLink>
+      </p>
+
+      <div class="test-users">
+        <p class="test-users-title">Seed users for testing</p>
+        <p><strong>Admin:</strong> owner@metrohardware.com / password123</p>
+        <p><strong>Customer:</strong> customer@example.com / password123</p>
+      </div>
     </div>
   </div>
 </template>
 
-<script>
-import { useRouter } from 'vue-router'
-import { ref, reactive } from 'vue'
+<script setup>
+import { computed, reactive, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { resolveAuthenticatedRedirect } from '@/router'
 
-export default {
-  name: 'LoginPage',
-  setup() {
-    const router = useRouter()
-    const showPw = ref(false)
-    const isLoading = ref(false)
-    const form = reactive({ email: '', password: '' })
-    const errors = reactive({ email: '', password: '', general: '' })
+const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
 
-    const clearError = (field) => { errors[field] = ''; errors.general = '' }
-    const goBack = () => router.push('/')
+const showPw = ref(false)
+const isLoading = ref(false)
+const form = reactive({ email: '', password: '' })
+const errors = reactive({ email: '', password: '', general: '' })
 
-    const validate = () => {
-      let ok = true
-      if (!form.email.trim()) { errors.email = 'Email is required'; ok = false }
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { errors.email = 'Enter a valid email'; ok = false }
-      if (!form.password) { errors.password = 'Password is required'; ok = false }
-      else if (form.password.length < 4) { errors.password = 'Password too short'; ok = false }
-      return ok
-    }
+const redirectTarget = computed(() => typeof route.query.redirect === 'string' ? route.query.redirect : undefined)
 
-    const handleLogin = async () => {
-      errors.email = ''; errors.password = ''; errors.general = ''
-      if (!validate()) return
-      isLoading.value = true
-      await new Promise(r => setTimeout(r, 900))
-      isLoading.value = false
-      router.push('/dashboard')
-    }
+const clearError = (field) => {
+  errors[field] = ''
+  errors.general = ''
+}
 
-    return { form, errors, showPw, isLoading, goBack, handleLogin, clearError }
+const goBack = () => {
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
+  router.push(route.path.startsWith('/store') ? '/store' : '/')
+}
+
+const validate = () => {
+  let valid = true
+
+  if (!form.email.trim()) {
+    errors.email = 'Email is required'
+    valid = false
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    errors.email = 'Enter a valid email'
+    valid = false
+  }
+
+  if (!form.password) {
+    errors.password = 'Password is required'
+    valid = false
+  }
+
+  return valid
+}
+
+const handleLogin = async () => {
+  errors.email = ''
+  errors.password = ''
+  errors.general = ''
+
+  if (!validate()) return
+
+  isLoading.value = true
+
+  try {
+    const user = await authStore.login(form.email, form.password)
+    const nextPath = resolveAuthenticatedRedirect(router, user.role, redirectTarget.value)
+    router.replace(nextPath)
+  } catch (error) {
+    errors.general = error.message || 'Unable to sign in right now.'
+  } finally {
+    isLoading.value = false
   }
 }
 </script>
@@ -146,43 +180,63 @@ export default {
   position: relative;
   min-height: 100vh;
   background: #f5f6f7;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   font-family: 'Geist', sans-serif;
   padding: 24px;
 }
 
-/* ── Background ── */
 .bg-blob {
-  position: absolute; border-radius: 50%;
-  filter: blur(90px); pointer-events: none;
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
 }
+
 .blob-1 {
-  width: 480px; height: 400px;
+  width: 480px;
+  height: 400px;
   background: radial-gradient(circle, rgba(37,99,235,0.13) 0%, rgba(37,99,235,0.04) 60%, transparent 80%);
-  top: -140px; left: -100px;
+  top: -140px;
+  left: -100px;
   animation: driftA 13s ease-in-out infinite alternate;
 }
+
 .blob-2 {
-  width: 360px; height: 320px;
+  width: 360px;
+  height: 320px;
   background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, rgba(37,99,235,0.03) 60%, transparent 80%);
-  bottom: -100px; right: -70px;
+  bottom: -100px;
+  right: -70px;
   animation: driftB 16s ease-in-out infinite alternate;
 }
-@keyframes driftA { from { transform: translate(0,0); } to { transform: translate(35px, 22px); } }
-@keyframes driftB { from { transform: translate(0,0); } to { transform: translate(-25px, -16px); } }
+
+@keyframes driftA {
+  from { transform: translate(0,0); }
+  to { transform: translate(35px, 22px); }
+}
+
+@keyframes driftB {
+  from { transform: translate(0,0); }
+  to { transform: translate(-25px, -16px); }
+}
+
 .bg-dots {
-  position: absolute; inset: 0;
+  position: absolute;
+  inset: 0;
   background-image: radial-gradient(circle, rgba(37,99,235,0.1) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 25%, transparent 100%);
   pointer-events: none;
 }
 
-/* ── Card ── */
 .login-card {
-  position: relative; z-index: 10;
-  width: 100%; max-width: 400px;
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 420px;
   background: #ffffff;
   border: 1.5px solid #e4e4e7;
   border-radius: 18px;
@@ -190,125 +244,248 @@ export default {
   box-shadow: 0 4px 24px rgba(37,99,235,0.08), 0 1px 4px rgba(0,0,0,0.05);
   animation: slideUp 0.5s cubic-bezier(0.34, 1.4, 0.64, 1) both;
 }
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(24px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ── Back button ── */
 .back-btn {
-  position: absolute; top: 16px; left: 18px;
-  display: inline-flex; align-items: center; gap: 5px;
-  background: transparent; border: none;
-  color: #71717a; cursor: pointer;
-  font-size: 12px; font-family: 'Geist', sans-serif;
-  padding: 4px 8px; border-radius: 6px;
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'Geist', sans-serif;
+  padding: 4px 8px;
+  border-radius: 6px;
   transition: color 0.15s, background 0.15s;
 }
+
 .back-btn svg { width: 13px; height: 13px; }
 .back-btn:hover { color: #2563eb; background: #eff6ff; }
 
-/* ── Header ── */
-.card-header { text-align: center; margin-bottom: 26px; }
+.card-header {
+  text-align: center;
+  margin-bottom: 26px;
+}
+
 .card-logo {
-  width: 64px; height: 64px; margin: 0 auto 14px;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px;
   background: #eff6ff;
   border: 1.5px solid #dbeafe;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 2px 12px rgba(37,99,235,0.12);
 }
-.card-logo-img { width: 44px; height: auto; object-fit: contain; }
-.card-title {
-  font-size: 21px; font-weight: 700; letter-spacing: -0.03em;
-  color: #09090b; margin-bottom: 4px;
-}
-.card-subtitle { font-size: 13px; color: #71717a; }
 
-/* ── Form ── */
-.login-form { display: flex; flex-direction: column; gap: 16px; }
-.form-group { display: flex; flex-direction: column; gap: 5px; }
+.card-logo-img { width: 44px; height: auto; object-fit: contain; }
+
+.card-title {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #09090b;
+  margin-bottom: 6px;
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: #71717a;
+  line-height: 1.5;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .form-label {
-  font-size: 10.5px; font-weight: 600;
-  color: #a1a1aa; letter-spacing: 0.7px; text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #a1a1aa;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
 }
+
 .input-wrap { position: relative; }
+
 .input-icon {
-  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-  width: 14px; height: 14px; color: #a1a1aa; pointer-events: none;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: #a1a1aa;
+  pointer-events: none;
 }
+
 .form-input {
-  width: 100%; padding: 10px 10px 10px 34px;
+  width: 100%;
+  padding: 10px 10px 10px 34px;
   background: #f7f7f8;
   border: 1.5px solid #e4e4e7;
-  border-radius: 8px; color: #09090b;
-  font-size: 13px; font-family: 'Geist', sans-serif;
+  border-radius: 8px;
+  color: #09090b;
+  font-size: 13px;
+  font-family: 'Geist', sans-serif;
   outline: none;
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
 }
+
 .form-input::placeholder { color: #a1a1aa; }
+
 .form-input:focus {
   border-color: #2563eb;
   background: #fff;
   box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
 }
+
 .has-error .form-input { border-color: #dc2626; }
 .has-error .form-input:focus { box-shadow: 0 0 0 3px rgba(220,38,38,0.1); }
 
 .pw-toggle {
-  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
-  background: transparent; border: none; cursor: pointer;
-  color: #a1a1aa; padding: 3px; display: flex; align-items: center;
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #a1a1aa;
+  padding: 3px;
+  display: flex;
+  align-items: center;
   transition: color 0.15s;
 }
+
 .pw-toggle svg { width: 15px; height: 15px; }
 .pw-toggle:hover { color: #2563eb; }
 .error-msg { font-size: 11.5px; color: #dc2626; }
 
-/* ── General error ── */
 .general-error {
-  display: flex; align-items: center; gap: 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 9px 12px;
-  background: #fee2e2; border: 1px solid #fca5a5;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
   border-radius: 7px;
-  font-size: 12.5px; color: #b91c1c;
+  font-size: 12.5px;
+  color: #b91c1c;
 }
-.general-error svg { width: 14px; height: 14px; flex-shrink: 0; color: #dc2626; }
 
-/* ── Submit ── */
+.general-error svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #dc2626;
+}
+
 .submit-btn {
-  margin-top: 4px; width: 100%; padding: 12px;
+  margin-top: 4px;
+  width: 100%;
+  padding: 12px;
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: #fff; border: none; border-radius: 8px;
-  font-size: 14px; font-weight: 600; font-family: 'Geist', sans-serif;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Geist', sans-serif;
   cursor: pointer;
   box-shadow: 0 3px 14px rgba(37,99,235,0.35), 0 1px 0 rgba(255,255,255,0.1) inset;
   transition: all 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
-  position: relative; overflow: hidden;
+  position: relative;
+  overflow: hidden;
 }
+
 .submit-btn::before {
-  content: ''; position: absolute; inset: 0;
+  content: '';
+  position: absolute;
+  inset: 0;
   background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
 }
+
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 6px 22px rgba(37,99,235,0.45), 0 1px 0 rgba(255,255,255,0.12) inset;
 }
+
 .submit-btn:active:not(:disabled) { transform: translateY(0); }
 .submit-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .spinner-wrap { display: inline-flex; align-items: center; gap: 8px; }
+
 .spinner {
-  width: 14px; height: 14px;
-  border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Footer note ── */
-.card-note {
-  margin-top: 20px; text-align: center;
-  font-size: 11px; color: #a1a1aa; line-height: 1.5;
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.register-copy {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: #71717a;
+}
+
+.register-copy a {
+  color: #1d4ed8;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.register-copy a:hover { text-decoration: underline; }
+
+.test-users {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.test-users-title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #334155;
+}
+
+@media (max-width: 640px) {
+  .login-card {
+    padding: 34px 22px 24px;
+  }
 }
 </style>

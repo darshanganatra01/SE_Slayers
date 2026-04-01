@@ -49,9 +49,17 @@ export interface CartItem {
 }
 
 export interface User {
-  id: string;
-  name: string;
+  uid: string;
+  full_name: string;
   email: string;
+  role: 'admin' | 'customer';
+  is_active: boolean;
+  customer: {
+    cid: string;
+    customer_name: string;
+    email: string;
+    contact: string | null;
+  } | null;
 }
 
 export interface Address {

@@ -3,9 +3,12 @@
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h2 class="text-lg font-medium text-muted-foreground">
-          {{ greeting }}, <span class="text-foreground font-bold">{{ authStore.user?.name }}</span>
+          {{ greeting }},
+          <span class="text-foreground font-bold">{{ authStore.user?.full_name || 'shopper' }}</span>
         </h2>
-        <p class="text-sm text-muted-foreground">Welcome to Metro Hardware</p>
+        <p class="text-sm text-muted-foreground">
+          {{ authStore.isAuthenticated ? 'Welcome back to Metro Hardware' : 'Browse freely, then sign in when you are ready to checkout.' }}
+        </p>
       </div>
       <div class="relative w-full max-w-sm">
         <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -47,23 +50,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watchEffect } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
+import { ref, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import { products, skus, categories } from '@cd/data/mockData'
 import ProductCard from '@cd/components/ProductCard.vue'
 import Button from '@cd/components/ui/Button.vue'
 import Input from '@cd/components/ui/Input.vue'
 import { Search } from 'lucide-vue-next'
 
-const router = useRouter()
 const authStore = useAuthStore()
-
-watchEffect(() => {
-  if (!authStore.isAuthenticated) {
-    router.replace('/store/login')
-  }
-})
 
 const activeCategory = ref('All')
 const searchQuery = ref('')

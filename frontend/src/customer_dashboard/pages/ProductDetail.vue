@@ -98,9 +98,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watchEffect, onMounted } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@cd/stores/auth'
 import { useCartStore } from '@cd/stores/cart'
 import { getProductWithSku } from '@cd/data/mockData'
 import Button from '@cd/components/ui/Button.vue'
@@ -110,14 +109,7 @@ import type { SKU } from '@cd/types'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 const cartStore = useCartStore()
-
-watchEffect(() => {
-  if (!authStore.isAuthenticated) {
-    router.replace('/store/login')
-  }
-})
 
 const pid = computed(() => route.params.pid as string)
 const data = computed(() => getProductWithSku(pid.value))
@@ -234,4 +226,3 @@ const handleBuyNow = (sku: SKU) => {
   }
 }
 </script>
-
