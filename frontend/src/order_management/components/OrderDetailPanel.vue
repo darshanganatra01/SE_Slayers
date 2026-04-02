@@ -26,7 +26,10 @@
         <div>
           <div class="dp-sec-label">Items ({{ order.items.length }})</div>
           <div v-for="(it, i) in order.items" :key="i" class="dp-item-row">
-            <span>{{ it.name }}</span>
+            <div class="dp-item-info">
+              <div class="dp-item-name">{{ it.name }}</div>
+              <div v-if="it.specs" class="dp-item-specs">{{ it.specs }}</div>
+            </div>
             <span class="item-qty">
               Qty: {{ it.qty || 1 }}
               <span v-if="it.originalQty && it.qty !== it.originalQty" class="qty-changed">
@@ -119,7 +122,7 @@
 
 <script>
 import { CC, CB, CL, PC, PB, SC, SL } from '../store.js'
-import PackingModal from './PackingModal.vue'
+import PackingModal from './Packingmodal.vue'
 
 export default {
   name: 'OrderDetailPanel',
@@ -238,7 +241,7 @@ export default {
   display: flex; flex-direction: column;
   transition: width 0.24s cubic-bezier(0.4,0,0.2,1);
 }
-.dp.open { width: 300px; }
+.dp.open { width: 420px; }
 
 .dp-head { padding: 14px 18px 12px; border-bottom: 1.5px solid var(--border); flex-shrink: 0; }
 .dp-close-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -270,12 +273,15 @@ export default {
 .dp-kv .v   { color: var(--ink); font-weight: 500; }
 
 .dp-item-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 10px; border-radius: 6px; font-size: 12px;
-  background: var(--surface); border: 1px solid var(--border-2); margin-bottom: 4px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 8px 12px; border-radius: 6px; font-size: 12px;
+  background: var(--surface); border: 1px solid var(--border-2); margin-bottom: 6px;
 }
 .dp-item-row:last-child { margin-bottom: 0; }
-.item-qty     { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; }
+.dp-item-info  { display: flex; flex-direction: column; gap: 2px; }
+.dp-item-name  { font-weight: 600; color: var(--ink); }
+.dp-item-specs { font-size: 10.5px; color: var(--ink-4); line-height: 1.4; }
+.item-qty      { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
 .qty-changed  { color: var(--amber); font-size: 10px; font-weight: 600; }
 
 .dp-footer { padding: 12px 18px; border-top: 1.5px solid var(--border); flex-shrink: 0; }

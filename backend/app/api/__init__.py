@@ -16,7 +16,9 @@ api = Api(
 from app.api.auth import auth_ns       # noqa: E402
 from app.api.health import health_ns   # noqa: E402
 from app.api.customer_portal.customer_portal import customer_ns
+from app.api.internal_portal.internal_portal import internal_ns
 
 api.add_namespace(auth_ns)
 api.add_namespace(health_ns)
 api.add_namespace(customer_ns)
+api.add_namespace(internal_ns)

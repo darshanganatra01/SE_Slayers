@@ -10,24 +10,10 @@ export const SL = { inprocess: 'In Progress', packed: 'Packed', shipped: 'Shippe
 
 export const useOrderStore = defineStore('orders', {
   state: () => ({
-    inventory: {
-      'Brake Pads B200':    { stock: 8,  max: 20 },
-      'Engine Filter EF-X': { stock: 3,  max: 15 },
-      'Spark Plug SP-9':    { stock: 11, max: 20 },
-      'Clutch Cable CC-4':  { stock: 6,  max: 12 },
-      'Oil Filter OF-7':    { stock: 14, max: 20 },
-      'Air Filter AF-3':    { stock: 2,  max: 10 },
-    },
-    orders: [
-      { id: 'ORD-4821', status: 'inprocess', order: 0, customer: 'Arjun Mehta',   custType: 'VIP',     priority: 'High',   value: '₹12,400', placedOn: 'March 10 2026', shop: 'Mehta Garage', items: [{ name: 'Brake Pads B200', inStock: true }, { name: 'Engine Filter EF-X', inStock: false }, { name: 'Oil Filter OF-7', inStock: true }] },
-      { id: 'ORD-4819', status: 'inprocess', order: 1, customer: 'Priya Sharma',  custType: 'Regular', priority: 'High',   value: '₹8,750',  placedOn: 'March 11 2026', shop: 'Raj Plumbing service',        items: [{ name: 'Spark Plug SP-9', inStock: true }, { name: 'Clutch Cable CC-4', inStock: true }] },
-      { id: 'ORD-4816', status: 'inprocess', order: 2, customer: 'Kiran Nair',    custType: 'Delayed', priority: 'Medium', value: '₹5,100',  placedOn: 'March 15 2026', shop: 'Adyar Mechanics',        items: [{ name: 'Air Filter AF-3', inStock: false }, { name: 'Oil Filter OF-7', inStock: true }] },
-      { id: 'ORD-4812', status: 'inprocess', order: 3, customer: 'Deepak Rao',    custType: 'New',     priority: 'Low',    value: '₹3,200',  placedOn: 'March 10 2026', shop: 'Poonam Mart',            items: [{ name: 'Brake Pads B200', inStock: true }] },
-      { id: 'ORD-4815', status: 'packed',    order: 0, customer: 'Ravi Kumar',    custType: 'VIP',     priority: 'Low',    value: '₹22,100', placedOn: 'March 20 2026', shop: 'Anna Garage',       packages: 3, packagingCost: '₹450', items: [{ name: 'Engine Filter EF-X', inStock: true }, { name: 'Clutch Cable CC-4', inStock: true }] },
-      { id: 'ORD-4808', status: 'packed',    order: 1, customer: 'Neha Patel',    custType: 'Regular', priority: 'Medium', value: '₹9,600',  placedOn: 'March 20 2026', shop: 'Mylapore Spare point',          packages: 2, packagingCost: '₹300', items: [{ name: 'Spark Plug SP-9', inStock: true }, { name: 'Air Filter AF-3', inStock: false }] },
-      { id: 'ORD-4803', status: 'shipped',   order: 0, customer: 'Suresh Babu',   custType: 'VIP',     priority: 'Medium', value: '₹18,900', placedOn: 'March 10 2026',  shop: 'Porur Mart',             transport: 'BlueDart Express', shippingCost: '₹650', items: [{ name: 'Brake Pads B200', inStock: true }, { name: 'Oil Filter OF-7', inStock: true }] },
-      { id: 'ORD-4798', status: 'shipped',   order: 1, customer: 'Meena Das',     custType: 'Delayed', priority: 'Low',    value: '₹6,400',  placedOn: 'March 11 2026',  shop: 'Anna Plumbing',            transport: 'DTDC Courier', shippingCost: '₹420', items: [{ name: 'Clutch Cable CC-4', inStock: true }] },
-    ]
+    inventory: {},
+    orders: [],
+    loading: false,
+    error: null
   }),
 
   getters: {
@@ -46,6 +32,22 @@ export const useOrderStore = defineStore('orders', {
   },
 
   actions: {
+    async fetchOrders() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const res = await fetch('/api/internal-portal/orders');
+        if (!res.ok) throw new Error('Failed to fetch orders');
+        const data = await res.json();
+        this.orders = data.orders || [];
+        this.inventory = data.inventory || {};
+      } catch (e) {
+        console.error('Failed fetching order data:', e);
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
 // In store.js — replace your promote action with this:
 
     promote(id, newStatus, transport, updatedItems) {

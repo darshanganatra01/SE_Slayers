@@ -117,6 +117,10 @@ export default {
     return { store }
   },
 
+  mounted() {
+    this.store.fetchOrders()
+  },
+
   data() {
     return {
       SC, SL,

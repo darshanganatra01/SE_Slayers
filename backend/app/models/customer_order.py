@@ -14,7 +14,7 @@ class CustomerOrder(db.Model):
     cid        = db.Column(db.String, db.ForeignKey("customers.cid"), nullable=False)
     created_by = db.Column(db.String, db.ForeignKey("users.uid"),     nullable=False)
     order_date = db.Column(db.Date,   nullable=False)
-    status       = db.Column(db.String)  # Draft / Confirmed / PartiallyFulfilled / Completed / Cancelled
+    status       = db.Column(db.String)  # Draft / Confirmed / Packed / Dispatched
     priority     = db.Column(db.String)  # High / Medium / Low — inherits Customer.Category by default
     total_amount = db.Column(db.Numeric(10, 2))
 

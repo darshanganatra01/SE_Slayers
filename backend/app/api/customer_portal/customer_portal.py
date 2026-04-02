@@ -273,13 +273,12 @@ class CustomerOrders(Resource):
                 amount = qty * sell_rate
                 total_order_amount += amount
                 
-                # Subtraction calculation
-                unit_sell = sku.unit_measurement_sell or 1
-                lot_sell = sku.lot_size_sell or 1
-                subtract_qty = qty * unit_sell * lot_sell
-                
-                if sku.stock_qty is not None:
-                    sku.stock_qty -= subtract_qty
+                # Stock subtraction logic removed per requirements (stock only reduced on shipping)
+                # unit_sell = sku.unit_measurement_sell or 1
+                # lot_sell = sku.lot_size_sell or 1
+                # subtract_qty = qty * unit_sell * lot_sell
+                # if sku.stock_qty is not None:
+                #     sku.stock_qty -= subtract_qty
                     
                 # Create Order Detail
                 detail_id = "COD-" + uuid.uuid4().hex[:8].upper()
