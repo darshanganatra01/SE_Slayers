@@ -107,6 +107,8 @@ def serialize_user(user: User) -> dict:
                 "customer_name": customer.customer_name,
                 "email": customer.email,
                 "contact": customer.contact,
+                "location": customer.location,
+                "pincode": customer.pincode,
             }
             if customer is not None
             else None

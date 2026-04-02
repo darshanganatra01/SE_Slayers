@@ -6,17 +6,17 @@
       <Card>
         <CardHeader><div class="text-base font-semibold leading-none tracking-tight">Delivery Address</div></CardHeader>
         <CardContent>
-          <RadioGroup v-model="selectedAddress" class="space-y-3">
-            <div v-for="addr in mockAddresses" :key="addr.id" class="flex items-start gap-3">
-              <RadioGroupItem :value="addr.id" :id="addr.id" class="mt-1" />
-              <Label :for="addr.id" class="cursor-pointer">
-                <p class="font-semibold">{{ addr.label }}</p>
-                <p class="text-sm text-muted-foreground">
-                  {{ addr.line1 }}, {{ addr.line2 }}, {{ addr.city }}, {{ addr.state }} – {{ addr.pincode }}
-                </p>
-              </Label>
+          <div class="flex items-start gap-3">
+            <Home class="mt-1 h-4 w-4 text-muted-foreground" />
+            <div>
+              <p class="font-semibold">{{ authStore.user?.full_name }}</p>
+              <p class="text-sm text-muted-foreground">
+                {{ authStore.user?.customer?.location || 'No address provided' }}
+                <span v-if="authStore.user?.customer?.pincode"> – {{ authStore.user?.customer?.pincode }}</span>
+              </p>
+              <p class="mt-1 text-xs text-muted-foreground">Contact: {{ authStore.user?.customer?.contact || 'N/A' }}</p>
             </div>
-          </RadioGroup>
+          </div>
         </CardContent>
       </Card>
 
@@ -37,27 +37,19 @@
       <Card>
         <CardHeader><div class="text-base font-semibold leading-none tracking-tight">Payment</div></CardHeader>
         <CardContent>
-          <RadioGroup v-model="paymentMode" class="space-y-3">
-            <div class="flex items-start gap-3">
-              <RadioGroupItem value="immediate" id="pay-now" class="mt-1" />
-              <Label for="pay-now" class="cursor-pointer">
-                <p class="font-semibold">Pay Immediately</p>
-                <p class="text-sm text-muted-foreground">UPI / Bank Transfer</p>
-              </Label>
+          <div class="flex items-center gap-3 py-2">
+            <CreditCard class="h-5 w-5 text-primary" />
+            <div>
+              <p class="font-semibold">Pay on credit</p>
+              <p class="text-sm text-muted-foreground">Make payment before the credit period</p>
             </div>
-            <div class="flex items-start gap-3">
-              <RadioGroupItem value="credit" id="pay-credit" class="mt-1" />
-              <Label for="pay-credit" class="cursor-pointer">
-                <p class="font-semibold">Pay on Credit</p>
-                <p class="text-sm text-muted-foreground">Pay on or before the credit period</p>
-              </Label>
-            </div>
-          </RadioGroup>
+          </div>
         </CardContent>
       </Card>
 
-      <Button size="lg" class="w-full" @click="handlePlaceOrder">
-        Place Order — ₹{{ cartStore.totalPrice.toLocaleString() }}
+      <Button size="lg" class="w-full" @click="handlePlaceOrder" :disabled="isLoading">
+        <span v-if="isLoading">Processing...</span>
+        <span v-else>Place Order — ₹{{ cartStore.totalPrice.toLocaleString() }}</span>
       </Button>
     </div>
   </div>
@@ -67,17 +59,17 @@
 import { ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '@cd/stores/cart'
-import { mockAddresses } from '@cd/data/mockData'
+import { useAuthStore } from '@/stores/auth'
+import { placeOrder } from '@cd/data/api'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
 import CardHeader from '@cd/components/ui/CardHeader.vue'
 import CardContent from '@cd/components/ui/CardContent.vue'
-import RadioGroup from '@cd/components/ui/RadioGroup.vue'
-import RadioGroupItem from '@cd/components/ui/RadioGroupItem.vue'
-import Label from '@cd/components/ui/Label.vue'
+import { Home, CreditCard } from 'lucide-vue-next'
 
 const router = useRouter()
 const cartStore = useCartStore()
+const authStore = useAuthStore()
 
 watchEffect(() => {
   if (cartStore.items.length === 0) {
@@ -85,12 +77,31 @@ watchEffect(() => {
   }
 })
 
-const selectedAddress = ref(mockAddresses[0].id)
-const paymentMode = ref<'credit' | 'immediate'>('immediate')
+const isLoading = ref(false)
 
-const handlePlaceOrder = () => {
-  cartStore.clearCart()
-  alert('Order placed successfully!')
-  router.push('/store/orders')
+const handlePlaceOrder = async () => {
+  if (!authStore.user?.customer?.cid) {
+    alert("You must be logged in as a valid customer.")
+    return
+  }
+
+  const itemsPayload = cartStore.items.map(item => ({
+    skuId: item.sku.skuId,
+    quantity: item.quantity
+  }))
+
+  isLoading.value = true
+  try {
+    const res = await placeOrder(authStore.user.customer.cid, itemsPayload)
+    cartStore.clearCart()
+    alert(`Order placed successfully!\nOrder ID: ${res.order_id}`)
+    router.push('/store/orders')
+  } catch (err) {
+    console.error("Failed to place order:", err)
+    alert("There was an error placing your order. Please try again.")
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
+

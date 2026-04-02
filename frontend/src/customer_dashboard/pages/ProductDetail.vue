@@ -102,28 +102,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watchEffect } from 'vue'
+import { ref, computed, watchEffect, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCartStore } from '@cd/stores/cart'
-import { getProductWithSku } from '@cd/data/mockData'
+import { fetchProductDetail } from '@cd/data/api'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
 import { Minus, Plus, ShoppingCart, Zap } from 'lucide-vue-next'
-import type { SKU } from '@cd/types'
+import type { SKU, Product } from '@cd/types'
 
 const route = useRoute()
 const router = useRouter()
 const cartStore = useCartStore()
 
 const pid = computed(() => route.params.pid as string)
-const data = computed(() => getProductWithSku(pid.value))
+const data = ref<{ product: Product, skus: SKU[] } | null>(null)
+
+const loadData = async () => {
+  try {
+    data.value = await fetchProductDetail(pid.value)
+  } catch (err) {
+    console.error("Failed to load product details", err)
+    data.value = null
+  }
+}
+
+onMounted(loadData)
+watch(pid, loadData)
 
 const commonSpecs = computed(() => {
   if (!data.value || data.value.skus.length === 0) return {}
   
   const allSpecs = data.value.skus.map(sku => {
     try {
-      return JSON.parse(sku.specs)
+      if (typeof sku.specs === 'string') {
+        // Our backend already parsed it into a flat string! 
+        return { stringSpec: sku.specs }
+      }
+      return sku.specs || {}
     } catch (e) {
       return {}
     }
@@ -131,6 +147,7 @@ const commonSpecs = computed(() => {
 
   if (allSpecs.length === 0) return {}
   
+
   const common: Record<string, any> = {}
   const keys = Object.keys(allSpecs[0])
 

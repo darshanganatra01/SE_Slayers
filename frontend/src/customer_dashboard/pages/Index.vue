@@ -40,7 +40,6 @@
         v-for="product in filtered"
         :key="product.pid"
         :product="product"
-        :sku="getSku(product.pid)"
       />
     </div>
     <div v-else class="py-12 text-center text-muted-foreground">
@@ -50,9 +49,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { products, skus, categories } from '@cd/data/mockData'
+import { categories } from '@cd/data/mockData' // keep categories mock for now
+import { fetchProducts } from '@cd/data/api'
+import type { Product } from '@cd/types'
 import ProductCard from '@cd/components/ProductCard.vue'
 import Button from '@cd/components/ui/Button.vue'
 import Input from '@cd/components/ui/Input.vue'
@@ -62,6 +63,16 @@ const authStore = useAuthStore()
 
 const activeCategory = ref('All')
 const searchQuery = ref('')
+const products = ref<Product[]>([])
+
+onMounted(async () => {
+  try {
+    const data = await fetchProducts()
+    products.value = data
+  } catch (err) {
+    console.error("Failed to load products", err)
+  }
+})
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -71,7 +82,7 @@ const greeting = computed(() => {
 })
 
 const filtered = computed(() => {
-  let result = products
+  let result = products.value
 
   if (activeCategory.value !== 'All') {
     result = result.filter(p => p.category === activeCategory.value)
@@ -85,7 +96,4 @@ const filtered = computed(() => {
   return result
 })
 
-const getSku = (pid: string) => {
-  return skus.find(s => s.pid === pid)!
-}
 </script>

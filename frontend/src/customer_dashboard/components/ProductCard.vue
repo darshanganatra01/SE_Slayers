@@ -14,7 +14,7 @@
       </div>
       <h3 class="text-sm font-semibold text-foreground line-clamp-2 h-10">{{ product.pName }}</h3>
       <p class="mt-1 text-xs text-muted-foreground">{{ product.category }}</p>
-      <p class="mt-2 text-lg font-bold text-primary">₹{{ productPrice }}</p>
+      <p class="mt-2 text-lg font-bold text-primary">From ₹{{ productPrice }}</p>
     </CardContent>
   </Card>
 </template>
@@ -22,13 +22,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Product, SKU } from '@cd/types'
+import type { Product } from '@cd/types'
 import Card from '@cd/components/ui/Card.vue'
 import CardContent from '@cd/components/ui/CardContent.vue'
 
 const props = defineProps<{
-  product: Product
-  sku: SKU
+  product: Product & { startingPrice?: number }
 }>()
 
 const router = useRouter()
@@ -50,7 +49,7 @@ const navigateToProduct = () => {
 }
 
 const productPrice = computed(() => {
-  return props.sku.currentSell.toLocaleString()
+  return (props.product.startingPrice || 0).toLocaleString()
 })
 </script>
 

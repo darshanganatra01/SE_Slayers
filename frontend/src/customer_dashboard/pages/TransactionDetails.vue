@@ -4,7 +4,8 @@
       ← Back to Orders
     </Button>
 
-    <div v-if="!orderData" class="container py-10 text-center text-muted-foreground">Order not found.</div>
+    <div v-if="isLoading" class="container py-10 text-center text-muted-foreground">Loading...</div>
+    <div v-else-if="!orderData" class="container py-10 text-center text-muted-foreground">Order not found.</div>
 
     <template v-else>
       <h1 class="mb-1 text-2xl font-bold text-foreground">Order #{{ orderData.order.coId }}</h1>
@@ -79,9 +80,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getOrdersWithDetails } from '@cd/data/mockData'
+import { getOrderDetails } from '@cd/data/api'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
 import CardContent from '@cd/components/ui/CardContent.vue'
@@ -96,9 +97,19 @@ const router = useRouter()
 
 const coId = computed(() => route.params.coId as string)
 
-const orders = getOrdersWithDetails()
-const orderData = computed(() => orders.find(o => o.order.coId === coId.value))
+const orderData = ref<any>(null)
+const isLoading = ref(true)
 const randomSuffix = Math.floor(Math.random() * 9000 + 1000)
+
+onMounted(async () => {
+  try {
+    orderData.value = await getOrderDetails(coId.value)
+  } catch (e) {
+    console.error("Failed to load order details", e)
+  } finally {
+    isLoading.value = false
+  }
+})
 
 const getSpecSize = (specsString: string) => {
   try {
