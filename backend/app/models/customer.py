@@ -9,7 +9,7 @@ class Customer(db.Model):
     cid           = db.Column(db.String, primary_key=True)
     uid           = db.Column(db.String, db.ForeignKey("users.uid"), nullable=False)
     customer_name = db.Column(db.String, nullable=False)
-    category      = db.Column(db.String)   # Defines default priority: High / Medium / Low
+    acp           = db.Column(db.Integer)   # Defines default priority: High / Medium / Low
     location      = db.Column(db.String)
     pincode       = db.Column(db.Integer)
     contact       = db.Column(db.String)

@@ -20,6 +20,8 @@ class CustomerOrder(db.Model):
     # ── Relationships ─────────────────────────────────────────────
     customer = db.relationship("Customer",        back_populates="orders")
     creator  = db.relationship("User",            back_populates="customer_orders")
+    details  = db.relationship("CustomerOrderDetail", back_populates="customer_order", lazy="dynamic",
+                               cascade="all, delete-orphan")
     invoices = db.relationship("CustomerInvoice", back_populates="customer_order", lazy="dynamic",
                                cascade="all, delete-orphan")
 

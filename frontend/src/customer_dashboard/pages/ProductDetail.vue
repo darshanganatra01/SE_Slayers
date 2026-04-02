@@ -56,9 +56,8 @@
                          {{ key }}: {{ val }}
                       </span>
                     </div>
-                    <div class="flex items-center gap-2 mt-1">
-                      <span class="text-[10px] text-muted-foreground uppercase">SKU: {{ sku.skuId }}</span>
-                      <span v-if="getCartQty(sku.skuId) > 0" class="inline-flex items-center rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-600 border border-orange-200">
+                    <div v-if="getCartQty(sku.skuId) > 0" class="mt-1">
+                      <span class="inline-flex items-center rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-600 border border-orange-200">
                         {{ getCartQty(sku.skuId) }} in cart
                       </span>
                     </div>
@@ -72,7 +71,12 @@
                     <Button variant="outline" size="icon" class="h-8 w-8" @click="updateQty(sku.skuId, -1)">
                       <Minus class="h-3 w-3" />
                     </Button>
-                    <span class="w-8 text-center font-semibold">{{ quantities[sku.skuId] || 1 }}</span>
+                    <input
+                      type="number"
+                      v-model.number="quantities[sku.skuId]"
+                      class="w-12 h-8 rounded-md border border-input bg-background px-1 py-1 text-sm text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-semibold"
+                      min="0"
+                    />
                     <Button variant="outline" size="icon" class="h-8 w-8" @click="updateQty(sku.skuId, 1)">
                       <Plus class="h-3 w-3" />
                     </Button>
@@ -153,16 +157,16 @@ const quantities = ref<Record<string, number>>({})
 watchEffect(() => {
   if (data.value) {
     data.value.skus.forEach(sku => {
-      if (!quantities.value[sku.skuId]) {
-        quantities.value[sku.skuId] = 1
+      if (quantities.value[sku.skuId] === undefined) {
+        quantities.value[sku.skuId] = 0
       }
     })
   }
 })
 
 const updateQty = (skuId: string, delta: number) => {
-  const current = quantities.value[skuId] || 1
-  quantities.value[skuId] = Math.max(1, current + delta)
+  const current = quantities.value[skuId] || 0
+  quantities.value[skuId] = Math.max(0, current + delta)
 }
 
 const getCartQty = (skuId: string) => {
@@ -211,16 +215,24 @@ const formatSpecs = (specsString: string) => {
 }
 
 const handleAdd = (sku: SKU) => {
+  const qty = quantities.value[sku.skuId] || 0
+  if (qty <= 0) {
+    alert("Please select a quantity greater than 0")
+    return
+  }
   if (data.value) {
-    const qty = quantities.value[sku.skuId] || 1
     cartStore.addItem(data.value.product, sku, qty)
     alert(`${data.value.product.pName} (${formatSpecs(sku.specs).size}) added to cart`)
   }
 }
 
 const handleBuyNow = (sku: SKU) => {
+  const qty = quantities.value[sku.skuId] || 0
+  if (qty <= 0) {
+    alert("Please select a quantity greater than 0")
+    return
+  }
   if (data.value) {
-    const qty = quantities.value[sku.skuId] || 1
     cartStore.addItem(data.value.product, sku, qty)
     router.push('/store/cart')
   }

@@ -114,7 +114,7 @@ def serialize_user(user: User) -> dict:
     }
 
 
-def register_customer(*, full_name: str, email: str, password: str, contact: str | None = None) -> User:
+def register_customer(*, full_name: str, email: str, password: str, contact: str | None = None, location: str | None = None, pincode: int | None = None) -> User:
     email_normalized = email.strip().lower()
     if User.query.filter_by(email=email_normalized).first() is not None:
         raise AuthError("An account with this email already exists.", status_code=409)
@@ -134,6 +134,8 @@ def register_customer(*, full_name: str, email: str, password: str, contact: str
         customer_name=user.full_name,
         contact=contact.strip() if contact else None,
         email=email_normalized,
+        location=location.strip() if location else None,
+        pincode=pincode,
     )
     user.customer_profile = customer
     return user

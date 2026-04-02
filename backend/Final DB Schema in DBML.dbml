@@ -161,6 +161,14 @@ Table CustomerOrder {
   Note: 'Sales Order. Priority inheritance from Customer.Category is enforced at application layer.'
 }
 
+Table CustomerOrderDetail {
+  CODID     varchar [pk]
+  COID      varchar [not null, ref: > CustomerOrder.COID]
+  SKUID     varchar [not null, ref: > SKU.SKUID]
+  Quantity  int
+
+}
+
 Table CustomerInvoice {
   CInvID      varchar [pk]
   COID        varchar [not null, ref: > CustomerOrder.COID]

@@ -13,6 +13,7 @@ from app.models.vendor_invoice import (                              # noqa
 from app.models.vendor_return import VendorReturn, VendorReturnDetail  # noqa
 from app.models.customer import Customer                             # noqa
 from app.models.customer_order import CustomerOrder                  # noqa
+from app.models.customer_order_detail import CustomerOrderDetail    # noqa
 from app.models.customer_invoice import (                            # noqa
     CustomerInvoice,
     CustomerInvDetail,

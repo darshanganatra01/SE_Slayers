@@ -23,6 +23,16 @@
             <Label for="password">Password</Label>
             <Input id="password" type="password" placeholder="••••••••" v-model="password" required />
           </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label for="location">Address</Label>
+              <Input id="location" placeholder="123 Street Name" v-model="location" />
+            </div>
+            <div class="space-y-2">
+              <Label for="pincode">Pincode</Label>
+              <Input id="pincode" type="number" placeholder="110001" v-model="pincode" />
+            </div>
+          </div>
           <div v-if="errorMessage" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {{ errorMessage }}
           </div>
@@ -56,6 +66,8 @@ const fullName = ref('')
 const email = ref('')
 const contact = ref('')
 const password = ref('')
+const location = ref('')
+const pincode = ref('')
 const errorMessage = ref('')
 const authStore = useAuthStore()
 const router = useRouter()
@@ -69,6 +81,8 @@ const handleSubmit = async () => {
       email: email.value,
       password: password.value,
       contact: contact.value || null,
+      location: location.value || null,
+      pincode: pincode.value ? parseInt(pincode.value.toString()) : null,
     })
     router.replace('/store')
   } catch (error: any) {

@@ -27,6 +27,7 @@ class SKU(db.Model):
     vendor_invoice_details  = db.relationship("VendorInvoiceDetail", back_populates="sku", lazy="dynamic")
     vendor_return_details   = db.relationship("VendorReturnDetail",  back_populates="sku", lazy="dynamic")
     customer_inv_details    = db.relationship("CustomerInvDetail",   back_populates="sku", lazy="dynamic")
+    customer_order_details  = db.relationship("CustomerOrderDetail", back_populates="sku", lazy="dynamic")
     customer_return_details = db.relationship("CustomerReturnDetail",back_populates="sku", lazy="dynamic")
     stock_adjustments       = db.relationship("StockAdjustment",     back_populates="sku", lazy="dynamic")
 

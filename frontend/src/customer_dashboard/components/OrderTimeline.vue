@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-center gap-0">
+  <div class="flex items-center justify-center gap-0 w-full">
     <div v-for="(step, i) in steps" :key="step.label" class="flex items-center">
       <div class="flex flex-col items-center">
         <div
