@@ -14,6 +14,7 @@ class CustomerInvoice(db.Model):
     created_by   = db.Column(db.String, db.ForeignKey("users.uid"),            nullable=False)
     invoice_date = db.Column(db.Date,   nullable=False)
     status       = db.Column(db.String)  # Unpaid / PartiallyPaid / Paid
+    total_amount = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     customer_order = db.relationship("CustomerOrder",  back_populates="invoices")
@@ -39,6 +40,7 @@ class CustomerInvDetail(db.Model):
     ordered_qty   = db.Column(db.Integer)
     delivered_qty = db.Column(db.Integer)         # May be less for partial fulfillment
     sale_price    = db.Column(db.Numeric(10, 2))  # Locked at time of invoice
+    amount        = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     customer_invoice = db.relationship("CustomerInvoice", back_populates="details")

@@ -10,6 +10,7 @@ class CustomerOrderDetail(db.Model):
     coid     = db.Column(db.String, db.ForeignKey("customer_orders.coid"), nullable=False)
     skuid    = db.Column(db.String, db.ForeignKey("skus.skuid"),            nullable=False)
     quantity = db.Column(db.Integer)
+    amount   = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     customer_order = db.relationship("CustomerOrder", back_populates="details")

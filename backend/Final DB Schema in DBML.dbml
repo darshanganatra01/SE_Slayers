@@ -77,6 +77,7 @@ Table VendorOrder {
   CreatedBy varchar  [not null, ref: > User.UID]
   OrderDate date     [not null]
   Status    varchar  [note: 'Draft / Confirmed / PartiallyReceived / Completed / Cancelled']
+  TotalAmount decimal(10,2)
 
   Note: 'Purchase Order (PO) raised to a vendor.'
 }
@@ -87,6 +88,7 @@ Table VendorOrderDetail {
   SKUID      varchar  [not null, ref: > SKU.SKUID]
   OrderedQty int      [not null]
   AgreePrice decimal(10,2) [note: 'Agreed price at time of PO']
+  Amount     decimal(10,2)
 
   Note: 'Line items of the PO. Records what was requested before goods arrive.'
 }
@@ -96,6 +98,7 @@ Table VendorInvoice {
   VOID         varchar [not null, ref: > VendorOrder.VOID]
   InvoiceDate  date    [not null]
   VendorInvNum varchar [note: 'Vendor-side invoice reference number']
+  TotalAmount  decimal(10,2)
 
   Note: 'Delivery document from vendor. Multiple invoices per order support partial deliveries.'
 }
@@ -107,6 +110,7 @@ Table VendorInvoiceDetail {
   OrderedQty    int
   ArrivedQty    int         [note: 'May differ from OrderedQty — tracks shortfalls']
   PurchasePrice decimal(10,2) [note: 'Price locked at time of this invoice']
+  Amount        decimal(10,2)
 
   Note: 'Line items of a vendor invoice. Price is historical and immutable after entry.'
 }
@@ -157,6 +161,7 @@ Table CustomerOrder {
   OrderDate date    [not null]
   Status    varchar [note: 'Draft / Confirmed / PartiallyFulfilled / Completed / Cancelled']
   Priority  varchar [note: 'Inherits Customer.Category by default; can be overridden. High / Medium / Low']
+  TotalAmount decimal(10,2)
 
   Note: 'Sales Order. Priority inheritance from Customer.Category is enforced at application layer.'
 }
@@ -166,7 +171,7 @@ Table CustomerOrderDetail {
   COID      varchar [not null, ref: > CustomerOrder.COID]
   SKUID     varchar [not null, ref: > SKU.SKUID]
   Quantity  int
-
+  Amount    decimal(10,2)
 }
 
 Table CustomerInvoice {
@@ -175,6 +180,7 @@ Table CustomerInvoice {
   CreatedBy   varchar [not null, ref: > User.UID]
   InvoiceDate date    [not null]
   Status      varchar [note: 'Unpaid / PartiallyPaid / Paid']
+  TotalAmount decimal(10,2)
 
   Note: 'Bill / dispatch note. Multiple invoices per order support partial fulfillment.'
 }
@@ -186,6 +192,7 @@ Table CustomerInvDetail {
   OrderedQty   int
   DeliveredQty int         [note: 'May be less than OrderedQty for partial fulfillment']
   SalePrice    decimal(10,2) [note: 'Price locked at time of invoice']
+  Amount       decimal(10,2)
 
   Note: 'Individual line items sold on a customer invoice.'
 }

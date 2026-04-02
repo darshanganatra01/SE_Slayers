@@ -13,6 +13,7 @@ class VendorInvoice(db.Model):
     void           = db.Column(db.String, db.ForeignKey("vendor_orders.void"), nullable=False)
     invoice_date   = db.Column(db.Date,   nullable=False)
     vendor_inv_num = db.Column(db.String)  # Vendor-side invoice reference number
+    total_amount   = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     vendor_order = db.relationship("VendorOrder",         back_populates="invoices")
@@ -38,6 +39,7 @@ class VendorInvoiceDetail(db.Model):
     ordered_qty    = db.Column(db.Integer)
     arrived_qty    = db.Column(db.Integer)          # May differ from ordered — tracks shortfalls
     purchase_price = db.Column(db.Numeric(10, 2))   # Locked at time of invoice
+    amount         = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     vendor_invoice = db.relationship("VendorInvoice", back_populates="details")

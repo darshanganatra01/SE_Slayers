@@ -10,7 +10,8 @@ class VendorOrder(db.Model):
     vid        = db.Column(db.String, db.ForeignKey("vendors.vid"), nullable=False)
     created_by = db.Column(db.String, db.ForeignKey("users.uid"),   nullable=False)
     order_date = db.Column(db.Date,   nullable=False)
-    status     = db.Column(db.String)  # Draft / Confirmed / PartiallyReceived / Completed / Cancelled
+    status       = db.Column(db.String)  # Draft / Confirmed / PartiallyReceived / Completed / Cancelled
+    total_amount = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     vendor   = db.relationship("Vendor", back_populates="vendor_orders")
@@ -34,6 +35,7 @@ class VendorOrderDetail(db.Model):
     skuid        = db.Column(db.String,  db.ForeignKey("skus.skuid"),         nullable=False)
     ordered_qty  = db.Column(db.Integer, nullable=False)
     agree_price  = db.Column(db.Numeric(10, 2))   # Agreed price at time of PO
+    amount       = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     vendor_order = db.relationship("VendorOrder", back_populates="details")
