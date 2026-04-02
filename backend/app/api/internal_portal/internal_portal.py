@@ -88,7 +88,7 @@ class InternalOrdersResource(Resource):
                         import json
                         specs_dict = json.loads(sku.specs) if isinstance(sku.specs, str) else sku.specs
                         if isinstance(specs_dict, dict):
-                            specs_str = " · ".join([f"{k}: {v}" for k, v in specs_dict.items()])
+                            specs_str = " ".join([str(v) for v in specs_dict.values()])
                         else:
                             specs_str = str(sku.specs)
                     

@@ -13,7 +13,10 @@
 
         <div class="pk-body">
           <div class="pk-item" v-for="(item, i) in localItems" :key="i">
-            <div class="pk-item-name">{{ item.name }}</div>
+            <div class="pk-item-info">
+              <div class="pk-item-name">{{ item.name }}</div>
+              <div v-if="item.specs" class="pk-item-specs">{{ item.specs }}</div>
+            </div>
             <div class="pk-qty-row">
               <button class="qty-btn" @click="decrement(i)" :disabled="item.qty <= 0">−</button>
               <div class="qty-val">{{ item.qty }}</div>
@@ -58,6 +61,7 @@ export default {
       if (val) {
         this.localItems = this.items.map(it => ({
           name: it.name,
+          specs: it.specs || '',
           qty:  it.qty || 1
         }))
       }
@@ -119,7 +123,9 @@ export default {
   transition: border-color 0.12s;
 }
 .pk-item:hover { border-color: var(--border); }
-.pk-item-name { font-size: 13px; font-weight: 500; color: var(--ink); flex: 1; min-width: 0; }
+.pk-item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.pk-item-name { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.pk-item-specs { font-size: 10.5px; color: var(--ink-4); line-height: 1.4; padding-right: 10px; }
 
 .pk-qty-row { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
 .qty-btn {
