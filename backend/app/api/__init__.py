@@ -22,3 +22,7 @@ api.add_namespace(auth_ns)
 api.add_namespace(health_ns)
 api.add_namespace(customer_ns)
 api.add_namespace(internal_ns)
+from app.api.inventory import inventory_ns  # noqa: E402
+
+
+api.add_namespace(inventory_ns)

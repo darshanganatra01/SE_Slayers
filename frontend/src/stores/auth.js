@@ -34,6 +34,12 @@ const readErrorMessage = async (response) => {
   }
 }
 
+const mergeHeaders = (options = {}, extraHeaders = {}) => ({
+  ...(options.body ? defaultHeaders : {}),
+  ...(options.headers || {}),
+  ...extraHeaders,
+})
+
 export const defaultRouteForRole = (role) => role === 'admin' ? '/dashboard' : '/store'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -62,10 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
   const request = async (path, options = {}) => {
     const response = await fetch(path, {
       ...options,
-      headers: {
-        ...(options.body ? defaultHeaders : {}),
-        ...(options.headers || {}),
-      },
+      headers: mergeHeaders(options),
     })
 
     if (!response.ok) {
@@ -131,6 +134,30 @@ export const useAuthStore = defineStore('auth', () => {
     initialized.value = true
   }
 
+  const authenticatedRequest = async (path, options = {}) => {
+    await initialize()
+
+    if (!token.value) {
+      throw new Error('You are not authenticated.')
+    }
+
+    try {
+      return await request(path, {
+        ...options,
+        headers: mergeHeaders(options, buildAuthHeaders(token.value)),
+      })
+    } catch (error) {
+      if (
+        error.message === 'Invalid authentication token.' ||
+        error.message === 'Your session has expired. Please sign in again.' ||
+        error.message === 'Missing authentication token.'
+      ) {
+        clearSession()
+      }
+      throw error
+    }
+  }
+
   return {
     token,
     user,
@@ -142,6 +169,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     clearSession,
+    authenticatedRequest,
     defaultRouteForRole,
   }
 })

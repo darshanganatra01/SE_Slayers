@@ -1,0 +1,80 @@
+Run it in 2 terminals: one for backend, one for frontend.
+
+Backend
+Open a terminal in:
+c:\Users\91945\VScode\SE Project\SE_Slayers\backend
+
+Then run:
+
+.\venv\Scripts\flask.exe --app run.py run
+What this does:
+
+uses your backend virtualenv
+loads backend/run.py
+which loads backend/.env
+connects to the DATABASE_URL in that file
+starts Flask on port 5000
+You should then be able to open:
+
+API docs: http://localhost:5000/api/docs
+If Flask says the port is busy, stop the old backend first and rerun.
+
+Frontend
+Open another terminal in:
+c:\Users\91945\VScode\SE Project\SE_Slayers\frontend
+
+Then run:
+
+cmd /c npm run dev
+Why cmd /c:
+
+your PowerShell setup previously blocked npm.ps1
+this avoids that issue
+This starts Vite, usually on:
+
+http://localhost:5173
+If 5173 is busy, Vite will print another port like 5174. Use the exact URL shown in that terminal.
+
+Open the app
+Once both are running, open:
+
+Frontend: http://localhost:5173
+Login page: http://localhost:5173/login
+Inventory page after admin login: http://localhost:5173/inventory
+Login
+Use admin:
+
+Email: owner@metrohardware.com
+Password: password123
+If login fails
+Restart backend after every backend code change:
+
+Ctrl + C in backend terminal
+rerun:
+.\venv\Scripts\flask.exe --app run.py run
+If frontend shows old behavior
+Restart frontend too:
+
+Ctrl + C in frontend terminal
+rerun:
+cmd /c npm run dev
+Recommended exact workflow
+Terminal 1:
+
+cd "c:\Users\91945\VScode\SE Project\SE_Slayers\backend"
+.\venv\Scripts\flask.exe --app run.py run
+Terminal 2:
+
+cd "c:\Users\91945\VScode\SE Project\SE_Slayers\frontend"
+cmd /c npm run dev
+Then open the frontend URL shown in terminal 2.
+
+Optional checks
+If you want to confirm backend is alive:
+
+visit http://localhost:5000/api/health/
+visit http://localhost:5000/api/docs
+If you want, I can next give you:
+
+the exact commands to seed Neon before running
+or a “full startup checklist” for your whole team to follow every time

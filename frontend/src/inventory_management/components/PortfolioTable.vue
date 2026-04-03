@@ -23,7 +23,7 @@
             <div class="pc">{{ prod.code }}</div>
           </td>
           <td>
-            <div class="size-chips">
+            <div v-if="prod.sizes.length" class="size-chips">
               <span
                 v-for="(sz, idx) in prod.sizes"
                 :key="idx"
@@ -31,6 +31,7 @@
                 :class="chipClass(sz.status)"
               >{{ sz.label }}</span>
             </div>
+            <div v-else class="empty-size">No sizes available yet</div>
           </td>
         </tr>
       </tbody>
@@ -90,6 +91,10 @@ tr:last-child td { border-bottom: none; }
 
 /* size chips */
 .size-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.empty-size {
+  font-size: 12px;
+  color: var(--ink-4);
+}
 .sc {
   font-size: 11px; border-radius: 4px;
   padding: 2px 7px; font-weight: 500; border: 1px solid;

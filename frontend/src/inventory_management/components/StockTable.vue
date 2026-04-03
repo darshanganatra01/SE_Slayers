@@ -2,17 +2,19 @@
   <div class="tbl-wrap">
     <table>
       <colgroup>
+        <col style="width:26%">
         <col style="width:28%">
-        <col style="width:30%">
-        <col style="width:24%">
-        <col style="width:18%">
+        <col style="width:20%">
+        <col style="width:14%">
+        <col style="width:12%">
       </colgroup>
       <thead>
         <tr>
           <th>Part name</th>
-          <th>Size &amp; dimensions</th>
+          <th>Size &amp; specifications</th>
           <th>Stock level</th>
           <th>Status</th>
+          <th class="r">Sell price</th>
         </tr>
       </thead>
       <tbody v-if="filteredParts.length">
@@ -24,7 +26,7 @@
         >
           <td>
             <div class="pn">{{ p.name }}</div>
-            <div class="pc">{{ p.sku }} · {{ p.category }}</div>
+            <div class="pc">{{ p.category }}</div>
           </td>
           <td>
             <div class="pd">{{ sizeDisplay(p) }}</div>
@@ -39,10 +41,11 @@
           <td>
             <span class="badge" :class="badgeClass(p.status)">{{ badgeLabel(p.status) }}</span>
           </td>
+          <td class="r sp">₹{{ formatPrice(p.sellPrice) }}</td>
         </tr>
       </tbody>
       <tbody v-else>
-        <tr class="empty-row"><td colspan="4">No parts match your filter</td></tr>
+        <tr class="empty-row"><td colspan="5">No parts match your filter</td></tr>
       </tbody>
     </table>
   </div>
@@ -82,7 +85,7 @@ export default {
     },
     barWidth(p) {
       if (p.maxStock === 0) return '0%'
-      return Math.round((p.stock / p.maxStock) * 100) + '%'
+      return Math.min(100, Math.round((p.stock / p.maxStock) * 100)) + '%'
     },
     barColor(p) {
       if (p.stock === 0) return 'bar-red'
@@ -106,8 +109,8 @@ export default {
       if (s === 'out') return 'Out of stock'
       return s
     },
-    priceNote() {
-      return ''
+    formatPrice(value) {
+      return Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     }
   }
 }
@@ -165,8 +168,10 @@ tr:last-child td { border-bottom: none; }
 .badge-green { background: var(--green-dim); color: var(--green); }
 .badge-amber { background: var(--amber-dim); color: #92400e; }
 .badge-red   { background: var(--red-dim);   color: var(--red); }
-
-
+.sp {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
 .empty-row td {
   padding: 32px; text-align: center;
