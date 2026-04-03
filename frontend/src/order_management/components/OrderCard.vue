@@ -22,7 +22,10 @@
       <div class="oc-name">{{ order.shop }}</div>
       <div class="items-wrap">
         <div v-for="(it, i) in order.items" :key="i" class="irow">
-          <span class="irow-name">{{ it.name }}</span>
+          <div class="irow-name-col">
+            <span class="irow-name">{{ it.name }}</span>
+            <span v-if="it.specs" class="irow-specs">{{ it.specs }}</span>
+          </div>
           <span class="irow-qty">
             <span v-if="it.originalQty && it.qty !== it.originalQty">
               {{ it.qty }}/{{ it.originalQty }}
@@ -183,8 +186,10 @@ export default {
   border-bottom: 1px solid var(--border-2);
 }
 .irow:last-child { border-bottom: none; }
+.irow-name-col { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .irow-name { color: var(--ink-3); }
-.irow-qty  { font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500; color: var(--ink-3); }
+.irow-specs { font-size: 9.5px; color: var(--ink-4); opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.irow-qty  { font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500; color: var(--ink-3); flex-shrink: 0; }
 
 .oc-extra { padding: 0 12px 8px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ink-4); }
 .oc-extra span { display: flex; align-items: center; gap: 3px; }

@@ -116,6 +116,111 @@ from datetime import datetime
 from app.models.customer_order import CustomerOrder
 from app.models.customer_order_detail import CustomerOrderDetail
 from app.models.customer import Customer
+from app.models.customer_invoice import CustomerInvoice, CustomerInvDetail
+from app.models.packing_slip import PackingSlip
+
+@customer_ns.route('/invoices')
+class CustomerInvoices(Resource):
+    def get(self):
+        """Fetch all invoices for a specific customer"""
+        cid = request.args.get('cid')
+        if not cid:
+            return {"message": "Customer ID is required"}, 400
+            
+        # Join CustomerInvoice -> PackingSlip -> CustomerOrder
+        invoices = CustomerInvoice.query.join(PackingSlip).join(CustomerOrder)\
+            .filter(CustomerOrder.cid == cid)\
+            .order_by(CustomerInvoice.invoice_date.desc()).all()
+            
+        results = []
+        for inv in invoices:
+            # Get first 3 unique product names
+            items = []
+            unique_products = []
+            for detail in inv.details.all():
+                sku = detail.sku
+                p_name = sku.vendor_product.product.pname if sku and sku.vendor_product and sku.vendor_product.product else "Unknown"
+                if p_name not in unique_products:
+                    unique_products.append(p_name)
+                
+                if len(unique_products) <= 3:
+                    items.append(p_name)
+            
+            items_str = ", ".join(unique_products[:3])
+            if len(unique_products) > 3:
+                items_str += "..."
+                
+            receipt = inv.delivery_receipts.first()
+            results.append({
+                "cInvId": inv.cinv_id,
+                "coId": inv.packing_slip.coid,
+                "invoiceDate": inv.invoice_date.isoformat() if inv.invoice_date else "",
+                "totalAmount": float(inv.total_amount) if inv.total_amount else 0.0,
+                "status": inv.status or "Unpaid",
+                "itemsSummary": items_str,
+                "isReceived": receipt is not None
+            })
+            
+        return results, 200
+
+@customer_ns.route('/invoices/<string:invId>')
+class CustomerInvoiceDetail(Resource):
+    def get(self, invId):
+        """Fetch details for a specific invoice"""
+        inv = CustomerInvoice.query.get(invId)
+        if not inv:
+            return {"message": "Invoice not found"}, 404
+            
+        items = []
+        for detail in inv.details.all():
+            sku = detail.sku
+            product = sku.vendor_product.product if sku and sku.vendor_product else None
+            
+            specs_str = ""
+            if sku and sku.specs:
+                try:
+                    specs_dict = json.loads(sku.specs) if isinstance(sku.specs, str) else sku.specs
+                    specs_str = " ".join([str(v) for v in specs_dict.values()])
+                except Exception:
+                    specs_str = str(sku.specs)
+            
+            items.append({
+                "cDetailId": detail.cdetail_id,
+                "orderedQty": detail.ordered_qty or 0,
+                "deliveredQty": detail.delivered_qty or 0,
+                "salePrice": float(detail.sale_price) if detail.sale_price else 0.0,
+                "amount": float(detail.amount) if detail.amount else 0.0,
+                "sku": {
+                    "skuId": sku.skuid if sku else "Unknown",
+                    "specs": specs_str
+                },
+                "product": {
+                    "pName": product.pname if product else "Unknown Product"
+                }
+            })
+            
+        receipt = inv.delivery_receipts.first()
+        receipt_info = None
+        if receipt:
+            receipt_info = {
+                "receiptId": receipt.receipt_id,
+                "receivedDate": receipt.received_date.isoformat(),
+                "notes": receipt.notes,
+                "receivedBy": receipt.receiver.full_name if receipt.receiver else "Unknown"
+            }
+
+        return {
+            "invoice": {
+                "cInvId": inv.cinv_id,
+                "invoiceDate": inv.invoice_date.isoformat() if inv.invoice_date else "",
+                "status": inv.status or "Unpaid",
+                "totalAmount": float(inv.total_amount) if inv.total_amount else 0.0,
+                "coId": inv.packing_slip.coid if inv.packing_slip else "",
+                "receipt": receipt_info
+            },
+            "items": items
+        }, 200
+
 
 @customer_ns.route('/orders/<string:coId>')
 class CustomerOrderDetailResource(Resource):
@@ -157,11 +262,27 @@ class CustomerOrderDetailResource(Resource):
                 }
             })
             
-        # Dummy invoice since subsystem not ready
-        dummy_invoice = {
-            "cInvId": f"INV-{order.coid}",
-            "status": "Unpaid"
-        }
+        # Get real invoices associated with this order via PackingSlips
+        invoices = CustomerInvoice.query.join(PackingSlip).filter(PackingSlip.coid == coId).all()
+        invoice_list = []
+        total_delivered_by_sku = {}
+        
+        for inv in invoices:
+            invoice_list.append({
+                "cInvId": inv.cinv_id,
+                "status": inv.status or "Unpaid",
+                "invoiceDate": inv.invoice_date.isoformat() if inv.invoice_date else ""
+            })
+            # Track delivered quantities per SKU
+            for inv_detail in inv.details:
+                sku_id = inv_detail.skuid
+                delivered = inv_detail.delivered_qty or 0
+                total_delivered_by_sku[sku_id] = total_delivered_by_sku.get(sku_id, 0) + delivered
+
+        # Update items with real delivered quantities
+        for item in items:
+            sku_id = item["sku"]["skuId"]
+            item["deliveredQty"] = total_delivered_by_sku.get(sku_id, 0)
             
         return {
             "order": {
@@ -170,7 +291,7 @@ class CustomerOrderDetailResource(Resource):
                 "status": order.status or "Unknown"
             },
             "totalAmount": float(order.total_amount) if order.total_amount else 0.0,
-            "invoice": dummy_invoice,
+            "invoices": invoice_list,
             "items": items
         }, 200
 
@@ -303,4 +424,179 @@ class CustomerOrders(Resource):
                 f.write(traceback.format_exc())
             return {"message": f"An error occurred: {str(e)}"}, 500
 
-
+
+@customer_ns.route('/items')
+class CustomerItems(Resource):
+    def get(self):
+        """Fetch all individual items ordered by a customer"""
+        cid = request.args.get('cid')
+        if not cid:
+            return {"message": "Customer ID is required"}, 400
+            
+        # Join CustomerOrderDetail -> CustomerOrder
+        details = CustomerOrderDetail.query.join(CustomerOrder)\
+            .filter(CustomerOrder.cid == cid)\
+            .order_by(CustomerOrder.order_date.desc()).all()
+            
+        results = []
+        for detail in details:
+            sku = detail.sku
+            product = sku.vendor_product.product if sku and sku.vendor_product else None
+            order = detail.customer_order
+            
+            # Determine status
+            # Find any invoice details for this SKU belonging to invoices of this order
+            invoiced_qty = db.session.query(db.func.sum(CustomerInvDetail.delivered_qty))\
+                .join(CustomerInvoice).join(PackingSlip)\
+                .filter(PackingSlip.coid == order.coid, CustomerInvDetail.skuid == detail.skuid)\
+                .scalar() or 0
+                
+            status = "Shipped" if invoiced_qty > 0 else "Confirmed"
+            
+            # Format specs
+            specs_str = ""
+            if sku and sku.specs:
+                try:
+                    specs_dict = json.loads(sku.specs) if isinstance(sku.specs, str) else sku.specs
+                    specs_str = " ".join([str(v) for v in specs_dict.values()])
+                except Exception:
+                    specs_str = str(sku.specs)
+            
+            results.append({
+                "codId": detail.codid,
+                "coId": order.coid,
+                "pName": product.pname if product else "Unknown",
+                "specs": specs_str,
+                "quantity": detail.quantity,
+                "status": status,
+                "orderDate": order.order_date.isoformat() if order.order_date else ""
+            })
+            
+        return results, 200
+
+@customer_ns.route('/items/<string:codId>')
+class CustomerItemDetail(Resource):
+    def get(self, codId):
+        """Fetch timeline and details for a specific ordered item"""
+        detail = CustomerOrderDetail.query.filter_by(codid=codId).first()
+        if not detail:
+            return {"message": "Item not found"}, 404
+            
+        sku = detail.sku
+        product = sku.vendor_product.product if sku and sku.vendor_product else None
+        order = detail.customer_order
+        
+        # Get shipping and receiving info
+        inv_details = CustomerInvDetail.query.join(CustomerInvoice).join(PackingSlip)\
+            .filter(PackingSlip.coid == order.coid, CustomerInvDetail.skuid == detail.skuid)\
+            .order_by(CustomerInvoice.invoice_date.asc()).all()
+            
+        shipped_date = None
+        total_shipped_qty = 0
+        if inv_details:
+            shipped_date = inv_details[0].customer_invoice.invoice_date.isoformat()
+            total_shipped_qty = sum(d.delivered_qty or 0 for d in inv_details)
+
+        # Get received info
+        from app.models.delivery_receipt import DeliveryReceipt, DeliveryReceiptDetail
+        received_details = DeliveryReceiptDetail.query.join(DeliveryReceipt).join(CustomerInvoice).join(PackingSlip)\
+            .filter(PackingSlip.coid == order.coid, DeliveryReceiptDetail.skuid == detail.skuid)\
+            .order_by(DeliveryReceipt.received_date.asc()).all()
+            
+        received_date = None
+        total_received_qty = 0
+        if received_details:
+            received_date = received_details[0].delivery_receipt.received_date.isoformat()
+            total_received_qty = sum(d.received_qty or 0 for d in received_details)
+            
+        timeline = [
+            {"status": "Confirmed", "date": order.order_date.isoformat() if order.order_date else "", "completed": True, "qty": detail.quantity or 0},
+            {"status": "Shipped", "date": shipped_date or "", "completed": shipped_date is not None, "qty": total_shipped_qty},
+            {"status": "Received", "date": received_date or "", "completed": received_date is not None, "qty": total_received_qty}
+        ]
+        
+        # Format specs
+        specs_str = ""
+        if sku and sku.specs:
+            try:
+                specs_dict = json.loads(sku.specs) if isinstance(sku.specs, str) else sku.specs
+                specs_str = " ".join([str(v) for v in specs_dict.values()])
+            except Exception:
+                specs_str = str(sku.specs)
+
+        return {
+            "codId": detail.codid,
+            "coId": order.coid,
+            "product": {
+                "pName": product.pname if product else "Unknown",
+                "specs": specs_str
+            },
+            "quantity": detail.quantity,
+            "amount": float(detail.amount) if detail.amount else 0.0,
+            "timeline": timeline
+        }, 200
+
+
+@customer_ns.route('/receive')
+class CustomerReceiveResource(Resource):
+    def post(self):
+        """Confirm receipt of an invoice"""
+        from app.models.delivery_receipt import DeliveryReceipt, DeliveryReceiptDetail
+        data = request.json
+        cinv_id = data.get('cinv_id')
+        uid = data.get('uid')
+        notes = data.get('notes', '')
+        items_data = data.get('items') # Optional list of {skuid, received_qty, condition}
+        
+        if not cinv_id or not uid:
+            return {"message": "Invoice ID and User ID are required"}, 400
+            
+        invoice = CustomerInvoice.query.get(cinv_id)
+        if not invoice:
+            return {"message": "Invoice not found"}, 404
+            
+        # Check if already received
+        existing_receipt = DeliveryReceipt.query.filter_by(cinv_id=cinv_id).first()
+        if existing_receipt:
+            return {"message": "Receipt already confirmed for this invoice"}, 400
+            
+        receipt_id = "DR-" + uuid.uuid4().hex[:8].upper()
+        new_receipt = DeliveryReceipt(
+            receipt_id=receipt_id,
+            cinv_id=cinv_id,
+            received_by=uid,
+            received_date=datetime.utcnow().date(),
+            notes=notes
+        )
+        db.session.add(new_receipt)
+        
+        if items_data:
+            for item in items_data:
+                skuid = item.get('skuid')
+                received_qty = int(item.get('received_qty', 0))
+                condition = item.get('condition', 'Good')
+                
+                drd_id = "DRD-" + uuid.uuid4().hex[:8].upper()
+                detail = DeliveryReceiptDetail(
+                    dr_detail_id=drd_id,
+                    receipt_id=receipt_id,
+                    skuid=skuid,
+                    received_qty=received_qty,
+                    condition=condition
+                )
+                db.session.add(detail)
+        else:
+            # Default: Receive all items in the invoice
+            for inv_detail in invoice.details:
+                drd_id = "DRD-" + uuid.uuid4().hex[:8].upper()
+                detail = DeliveryReceiptDetail(
+                    dr_detail_id=drd_id,
+                    receipt_id=receipt_id,
+                    skuid=inv_detail.skuid,
+                    received_qty=inv_detail.delivered_qty or 0,
+                    condition='Good'
+                )
+                db.session.add(detail)
+                
+        db.session.commit()
+        return {"message": "Receipt confirmed successfully", "receipt_id": receipt_id}, 201

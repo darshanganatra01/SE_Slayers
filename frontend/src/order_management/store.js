@@ -50,38 +50,50 @@ export const useOrderStore = defineStore('orders', {
     },
 // In store.js — replace your promote action with this:
 
-    promote(id, newStatus, transport, updatedItems) {
+    async promote(id, newStatus, transport, updatedItems) {
       const o = this.orders.find(x => x.id === id)
       if (!o) return
       const old = o.status
-      o.status = newStatus
-      o.order  = this.orders.filter(x => x.status === newStatus).length - 1
 
       if (newStatus === 'packed' && old === 'inprocess') {
-        // Apply updated quantities from the packing modal
-        if (updatedItems && updatedItems.length) {
-          const newItems = o.items.map(it => {
-            const updated = updatedItems.find(u => u.name === it.name)
-            if (updated) {
-              return { ...it, originalQty: it.qty || 1, qty: updated.qty }
-            }
-            return it
-          })
-          o.items.splice(0, o.items.length, ...newItems)
+        const payload = {
+          coid: id,
+          items: (updatedItems || []).filter(ui => ui.qty > 0).map(ui => ({
+            skuid: ui.skuid,
+            packed_qty: ui.qty
+          }))
         }
-        // Update inventory
-        o.items.forEach(it => {
-          if (it.inStock && this.inventory[it.name]) {
-            this.inventory[it.name].stock = Math.max(0, this.inventory[it.name].stock - (it.qty || 1))
-            it.inStock = this.inventory[it.name].stock > 0
-          }
-        })
-        if (!o.packages)      o.packages      = Math.ceil(o.items.length / 2)
-        if (!o.packagingCost) o.packagingCost = '₹' + (o.packages * 150)
 
-      } else if (newStatus === 'shipped') {
-        o.transport   = transport || 'BlueDart Express'
-        o.shippingCost = '₹' + (Math.floor(Math.random() * 400) + 300)
+        try {
+          const res = await fetch('/api/internal-portal/pack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          if (!res.ok) {
+            const errData = await res.json()
+            throw new Error(errData.message || 'Failed to pack order')
+          }
+          
+          // Refresh data to get new status and updated stock/packing slips
+          await this.fetchOrders()
+          return true
+        } catch (e) {
+          console.error('Packing failed:', e)
+          this.error = e.message
+          return false
+        }
+
+      } else {
+        // Fallback or other status transitions (shipped soon)
+        o.status = newStatus
+        o.order  = this.orders.filter(x => x.status === newStatus).length - 1
+        
+        if (newStatus === 'shipped') {
+          o.transport = transport || 'BlueDart Express'
+          o.shippingCost = '₹' + (Math.floor(Math.random() * 400) + 300)
+        }
+        return true
       }
     },
 
@@ -124,6 +136,46 @@ export const useOrderStore = defineStore('orders', {
         items
       })
       return newId
+    },
+
+    async unpack(pslip_id) {
+      try {
+        const res = await fetch('/api/internal-portal/unpack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pslip_id })
+        })
+        if (!res.ok) {
+          const errData = await res.json()
+          throw new Error(errData.message || 'Failed to unpack')
+        }
+        await this.fetchOrders()
+        return true
+      } catch (e) {
+        console.error('Unpack failed:', e)
+        this.error = e.message
+        return false
+      }
+    },
+
+    async ship(pslip_id, transport) {
+      try {
+        const res = await fetch('/api/internal-portal/ship', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pslip_id, transport })
+        })
+        if (!res.ok) {
+          const errData = await res.json()
+          throw new Error(errData.message || 'Failed to ship')
+        }
+        await this.fetchOrders()
+        return true
+      } catch (e) {
+        console.error('Ship failed:', e)
+        this.error = e.message
+        return false
+      }
     }
   }
 })

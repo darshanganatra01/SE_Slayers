@@ -174,9 +174,30 @@ Table CustomerOrderDetail {
   Amount    decimal(10,2)
 }
 
+Table PackingSlip {
+  PackSlipID  varchar [pk]
+  COID        varchar [not null, ref: > CustomerOrder.COID]
+  PackedBy    varchar [not null, ref: > User.UID]
+  PackedDate  date    [not null]
+  Status      varchar [note: 'Packed / Shipped']
+
+  Note: 'Represents one packed batch from an order. 
+         Status moves to Shipped when invoice is created.'
+}
+
+Table PackingSlipDetail {
+  PSDetailID  varchar [pk]
+  PackSlipID  varchar [not null, ref: > PackingSlip.PackSlipID]
+  SKUID       varchar [not null, ref: > SKU.SKUID]
+  PackedQty   int     [not null]
+
+  Note: 'Line items in the packed batch. 
+         PackedQty must not exceed remaining unfulfilled qty from CustomerOrderDetail.'
+}
+
 Table CustomerInvoice {
   CInvID      varchar [pk]
-  COID        varchar [not null, ref: > CustomerOrder.COID]
+  PackSlipID  varchar [not null, ref: > PackingSlip.PackSlipID]
   CreatedBy   varchar [not null, ref: > User.UID]
   InvoiceDate date    [not null]
   Status      varchar [note: 'Unpaid / PartiallyPaid / Paid']

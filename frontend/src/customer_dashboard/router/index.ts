@@ -34,6 +34,11 @@ const router = createRouter({
       component: () => import('../pages/TransactionDetails.vue')
     },
     {
+      path: '/invoice/:invId',
+      name: 'invoice',
+      component: () => import('../pages/InvoiceDetail.vue')
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../pages/Login.vue')
@@ -42,6 +47,11 @@ const router = createRouter({
       path: '/register',
       name: 'register',
       component: () => import('../pages/Register.vue')
+    },
+    {
+      path: '/item/:codId',
+      name: 'item-detail',
+      component: () => import('../pages/ItemDetail.vue')
     },
     {
       path: '/:pathMatch(.*)*',

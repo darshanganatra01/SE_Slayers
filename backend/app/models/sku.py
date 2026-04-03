@@ -29,7 +29,9 @@ class SKU(db.Model):
     customer_inv_details    = db.relationship("CustomerInvDetail",   back_populates="sku", lazy="dynamic")
     customer_order_details  = db.relationship("CustomerOrderDetail", back_populates="sku", lazy="dynamic")
     customer_return_details = db.relationship("CustomerReturnDetail",back_populates="sku", lazy="dynamic")
+    packing_slip_details    = db.relationship("PackingSlipDetail",   back_populates="sku", lazy="dynamic")
     stock_adjustments       = db.relationship("StockAdjustment",     back_populates="sku", lazy="dynamic")
+    delivery_receipt_details = db.relationship("DeliveryReceiptDetail", back_populates="sku", lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<SKU {self.skuid} qty={self.stock_qty}>"

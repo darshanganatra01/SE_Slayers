@@ -24,4 +24,9 @@ from app.models.customer_return import (                             # noqa
     CustomerReturn,
     CustomerReturnDetail,
 )
+from app.models.packing_slip import PackingSlip, PackingSlipDetail      # noqa
 from app.models.stock_adjustment import StockAdjustment              # noqa
+from app.models.delivery_receipt import (                             # noqa
+    DeliveryReceipt,
+    DeliveryReceiptDetail,
+)

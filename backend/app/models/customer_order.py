@@ -23,8 +23,8 @@ class CustomerOrder(db.Model):
     creator  = db.relationship("User",            back_populates="customer_orders")
     details  = db.relationship("CustomerOrderDetail", back_populates="customer_order", lazy="dynamic",
                                cascade="all, delete-orphan")
-    invoices = db.relationship("CustomerInvoice", back_populates="customer_order", lazy="dynamic",
-                               cascade="all, delete-orphan")
+    packing_slips = db.relationship("PackingSlip", back_populates="customer_order", lazy="dynamic",
+                                    cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<CustomerOrder {self.coid}>"
