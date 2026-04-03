@@ -14,7 +14,7 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">Inventory value</div>
-      <div class="stat-value stat-value--med">₹5,14,000</div>
+      <div class="stat-value stat-value--med">₹{{ formattedInventoryValue }}</div>
     </div>
   </div>
 </template>
@@ -25,7 +25,13 @@ export default {
   props: {
     total:   { type: Number, default: 0 },
     inStock: { type: Number, default: 0 },
-    lowStock:{ type: Number, default: 0 }
+    lowStock:{ type: Number, default: 0 },
+    inventoryValue: { type: Number, default: 0 }
+  },
+  computed: {
+    formattedInventoryValue() {
+      return Math.round(this.inventoryValue).toLocaleString('en-IN')
+    }
   }
 }
 </script>
