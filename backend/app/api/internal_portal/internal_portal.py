@@ -153,9 +153,9 @@ class InternalOrdersResource(Resource):
             all_received = True if shipped_slips else False
             
             for slip in shipped_slips:
-                if slip.customer_invoice:
-                    cinv_ids.append(slip.customer_invoice.cinv_id)
-                    if not slip.customer_invoice.delivery_receipts.first():
+                for inv in slip.invoices.all():
+                    cinv_ids.append(inv.cinv_id)
+                    if not inv.delivery_receipts.first():
                         all_received = False
                         
                 for psd in slip.details:
