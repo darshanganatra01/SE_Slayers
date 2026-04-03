@@ -8,14 +8,14 @@
 // ══════════════════════════════════════════════
 
 Table User {
-  UID        varchar [pk]
-  FullName   varchar [not null]
-  Role       varchar [not null, note: 'Admin / Manager / Sales / Store']
-  Email      varchar [unique, not null]
-  PasswordHash varchar [not null]
-  IsActive   boolean [default: true]
+  uid          varchar [pk]
+  full_name    varchar [not null]
+  role         varchar [not null, note: 'admin / customer']
+  email        varchar [unique, not null]
+  password_hash varchar [not null]
+  is_active    boolean [default: true]
 
-  Note: 'Staff accounts. UID is used as CreatedBy / RecordedBy / AdjustedBy / InitiatedBy / DispatchedBy across all operational tables.'
+  Note: 'Staff or customer accounts. uid is used as CreatedBy / RecordedBy / AdjustedBy / InitiatedBy / DispatchedBy across all operational tables.'
 }
 
 
@@ -24,44 +24,44 @@ Table User {
 // ══════════════════════════════════════════════
 
 Table Product {
-  PID             varchar [pk]
-  PName           varchar [not null]
-  Category        varchar
+  pid             varchar [pk]
+  pname           varchar [not null]
+  category        varchar
 
   Note: 'Master dictionary of all items.'
 }
 
 Table Vendor {
-  VID        varchar [pk]
-  VendorName varchar [not null]
-  VendorPrefix varchar [note: 'Vendor-specific prefix']
-  Location   varchar
-  Contact    varchar
-  Email      varchar
+  vid           varchar [pk]
+  vendor_name   varchar [not null]
+  vendor_prefix varchar [note: 'Vendor-specific prefix']
+  location      varchar
+  contact       varchar
+  email         varchar
 
   Note: 'Central directory of all suppliers.'
 }
 
 Table VendorProduct {
-  VPID         varchar [pk]
-  VID          varchar [not null, ref: > Vendor.VID]
-  PID          varchar [not null, ref: > Product.PID]
+  vpid         varchar [pk]
+  vid          varchar [not null, ref: > Vendor.vid]
+  pid          varchar [not null, ref: > Product.pid]
 
   Note: 'Maps which vendor sells which product. Bridge between Vendor and Product.'
 }
 
 Table SKU {
-  SKUID       varchar [pk]
-  VPID        varchar [not null, ref: > VendorProduct.VPID, note: 'Kept directly on SKU for fast lookup']
-  UnitMeasurementBuy int
-  LotSizeBuy int
-  CurrentBuyRate  decimal(10,2)
-  UnitMeasurementSell int
-  LotSizeSell int
-  CurrentSellRate decimal(10,2)
-  Specs       json    [note: 'Item variations e.g. size, color, grade']
-  StockQty    int     [default: 0]
-  Threshold   int     [note: 'Reorder level — alert when StockQty falls below this']
+  skuid                 varchar [pk]
+  vpid                  varchar [not null, ref: > VendorProduct.vpid, note: 'Kept directly on SKU for fast lookup']
+  unit_measurement_buy  int
+  lot_size_buy          int
+  current_buy_rate      decimal(10,2)
+  unit_measurement_sell int
+  lot_size_sell         int
+  current_sell_rate     decimal(10,2)
+  specs                 json    [note: 'Item variations e.g. size, color, grade']
+  stock_qty             int     [default: 0]
+  threshold             int     [note: 'Reorder level — alert when StockQty falls below this']
 
   Note: 'Physical stock unit in godown. One VendorProduct maps to exactly one SKU.'
 }
@@ -72,62 +72,66 @@ Table SKU {
 // ══════════════════════════════════════════════
 
 Table VendorOrder {
-  VOID      varchar  [pk]
-  VID       varchar  [not null, ref: > Vendor.VID]
-  CreatedBy varchar  [not null, ref: > User.UID]
-  OrderDate date     [not null]
-  Status    varchar  [note: 'Draft / Confirmed / PartiallyReceived / Completed / Cancelled']
+  void       varchar  [pk]
+  vid        varchar  [not null, ref: > Vendor.vid]
+  created_by varchar  [not null, ref: > User.uid]
+  order_date date     [not null]
+  status     varchar  [note: 'Draft / Confirmed / PartiallyReceived / Completed / Cancelled']
+  total_amount decimal(10,2)
 
   Note: 'Purchase Order (PO) raised to a vendor.'
 }
 
 Table VendorOrderDetail {
-  VODetailID varchar  [pk]
-  VOID       varchar  [not null, ref: > VendorOrder.VOID]
-  SKUID      varchar  [not null, ref: > SKU.SKUID]
-  OrderedQty int      [not null]
-  AgreePrice decimal(10,2) [note: 'Agreed price at time of PO']
+  vo_detail_id varchar  [pk]
+  void         varchar  [not null, ref: > VendorOrder.void]
+  skuid        varchar  [not null, ref: > SKU.skuid]
+  ordered_qty  int      [not null]
+  agree_price  decimal(10,2) [note: 'Agreed price at time of PO']
+  amount       decimal(10,2)
 
   Note: 'Line items of the PO. Records what was requested before goods arrive.'
 }
 
 Table VendorInvoice {
-  InvID        varchar [pk]
-  VOID         varchar [not null, ref: > VendorOrder.VOID]
-  InvoiceDate  date    [not null]
-  VendorInvNum varchar [note: 'Vendor-side invoice reference number']
+  inv_id        varchar [pk]
+  void          varchar [not null, ref: > VendorOrder.void]
+  invoice_date  date    [not null]
+  vendor_inv_num varchar [note: 'Vendor-side invoice reference number']
+  total_amount  decimal(10,2)
 
   Note: 'Delivery document from vendor. Multiple invoices per order support partial deliveries.'
 }
 
 Table VendorInvoiceDetail {
-  DetailID      varchar     [pk]
-  InvID         varchar     [not null, ref: > VendorInvoice.InvID]
-  SKUID         varchar     [not null, ref: > SKU.SKUID]
-  OrderedQty    int
-  ArrivedQty    int         [note: 'May differ from OrderedQty — tracks shortfalls']
-  PurchasePrice decimal(10,2) [note: 'Price locked at time of this invoice']
+  detail_id      varchar     [pk]
+  inv_id         varchar     [not null, ref: > VendorInvoice.inv_id]
+  skuid          varchar     [not null, ref: > SKU.skuid]
+  ordered_qty    int
+  arrived_qty    int         [note: 'May differ from OrderedQty — tracks shortfalls']
+  purchase_price decimal(10,2) [note: 'Price locked at time of this invoice']
+  amount         decimal(10,2)
 
   Note: 'Line items of a vendor invoice. Price is historical and immutable after entry.'
 }
 
 Table VendorReturn {
-  VReturnID   varchar [pk]
-  InvID       varchar [not null, ref: > VendorInvoice.InvID]
-  InitiatedBy varchar [not null, ref: > User.UID]
-  ReturnDate  date    [not null]
-  Reason      varchar
-  Status      varchar [note: 'Pending / Processed / Credited']
+  v_return_id   varchar [pk]
+  inv_id        varchar [not null, ref: > VendorInvoice.inv_id]
+  initiated_by  varchar [not null, ref: > User.uid]
+  return_date   date    [not null]
+  reason        varchar
+  status        varchar [note: 'Pending / Processed / Credited']
 
-  Note: 'Records goods being sent back to a vendor. Linked to the originating invoice.'
+  Note: 'Records goods being sent back to a vendor. Linked to instructions.'
 }
 
 Table VendorReturnDetail {
-  VRDetailID   varchar     [pk]
-  VReturnID    varchar     [not null, ref: > VendorReturn.VReturnID]
-  SKUID        varchar     [not null, ref: > SKU.SKUID]
-  ReturnQty    int         [not null]
-  CreditAmount decimal(10,2)
+  vr_detail_id   varchar     [pk]
+  v_return_id    varchar     [not null, ref: > VendorReturn.v_return_id]
+  skuid          varchar     [not null, ref: > SKU.skuid]
+  return_qty     int         [not null]
+  credit_amount  decimal(10,2)
 
   Note: 'Line items of a vendor return. Processing triggers a negative StockAdjustment.'
 }
@@ -138,93 +142,145 @@ Table VendorReturnDetail {
 // ══════════════════════════════════════════════
 
 Table Customer {
-  CID          varchar [pk]
-  UID          varchar [not null, ref: > User.UID]
-  CustomerName varchar [not null]
-  Category     varchar [note: 'Defines default priority: High / Medium / Low']
-  Location     varchar
-  Pincode      int
-  Contact      varchar
-  Email        varchar
+  cid           varchar [pk]
+  uid           varchar [not null, ref: > User.uid]
+  customer_name varchar [not null]
+  acp           int     [note: 'Defines default priority: High / Medium / Low']
+  location      varchar
+  pincode       int
+  contact       varchar
+  email         varchar
 
   Note: 'Central directory of all customers.'
 }
 
 Table CustomerOrder {
-  COID      varchar [pk]
-  CID       varchar [not null, ref: > Customer.CID]
-  CreatedBy varchar [not null, ref: > User.UID]
-  OrderDate date    [not null]
-  Status    varchar [note: 'Draft / Confirmed / PartiallyFulfilled / Completed / Cancelled']
-  Priority  varchar [note: 'Inherits Customer.Category by default; can be overridden. High / Medium / Low']
+  coid       varchar [pk]
+  cid        varchar [not null, ref: > Customer.cid]
+  created_by varchar [not null, ref: > User.uid]
+  order_date date    [not null]
+  status     varchar [note: 'Draft / Confirmed / Packed / Dispatched']
+  priority   varchar [note: 'Inherits Customer.acp by default; can be overridden. High / Medium / Low']
+  total_amount decimal(10,2)
 
-  Note: 'Sales Order. Priority inheritance from Customer.Category is enforced at application layer.'
+  Note: 'Sales Order. Priority inheritance from Customer.acp is enforced at application layer.'
+}
+
+Table CustomerOrderDetail {
+  codid     varchar [pk]
+  coid      varchar [not null, ref: > CustomerOrder.coid]
+  skuid     varchar [not null, ref: > SKU.skuid]
+  quantity  int
+  amount    decimal(10,2)
+}
+
+Table PackingSlip {
+  pslip_id    varchar [pk]
+  coid        varchar [not null, ref: > CustomerOrder.coid]
+  packed_by   varchar [not null, ref: > User.uid]
+  packed_date date    [not null]
+  status      varchar [note: 'Packed / Shipped']
+
+  Note: 'Represents one packed batch from an order. 
+         Status moves to Shipped when invoice is created.'
+}
+
+Table PackingSlipDetail {
+  psd_id      varchar [pk]
+  pslip_id    varchar [not null, ref: > PackingSlip.pslip_id]
+  skuid       varchar [not null, ref: > SKU.skuid]
+  packed_qty  int     [not null]
+
+  Note: 'Line items in the packed batch. 
+         PackedQty must not exceed remaining unfulfilled qty from CustomerOrderDetail.'
 }
 
 Table CustomerInvoice {
-  CInvID      varchar [pk]
-  COID        varchar [not null, ref: > CustomerOrder.COID]
-  CreatedBy   varchar [not null, ref: > User.UID]
-  InvoiceDate date    [not null]
-  Status      varchar [note: 'Unpaid / PartiallyPaid / Paid']
+  cinv_id      varchar [pk]
+  pslip_id     varchar [not null, ref: > PackingSlip.pslip_id]
+  created_by   varchar [not null, ref: > User.uid]
+  invoice_date date    [not null]
+  status       varchar [note: 'Unpaid / PartiallyPaid / Paid']
+  total_amount decimal(10,2)
 
   Note: 'Bill / dispatch note. Multiple invoices per order support partial fulfillment.'
 }
 
 Table CustomerInvDetail {
-  CDetailID    varchar     [pk]
-  CInvID       varchar     [not null, ref: > CustomerInvoice.CInvID]
-  SKUID        varchar     [not null, ref: > SKU.SKUID]
-  OrderedQty   int
-  DeliveredQty int         [note: 'May be less than OrderedQty for partial fulfillment']
-  SalePrice    decimal(10,2) [note: 'Price locked at time of invoice']
+  cdetail_id    varchar     [pk]
+  cinv_id       varchar     [not null, ref: > CustomerInvoice.cinv_id]
+  skuid         varchar     [not null, ref: > SKU.skuid]
+  ordered_qty   int
+  delivered_qty int         [note: 'May be less than OrderedQty for partial fulfillment']
+  sale_price    decimal(10,2) [note: 'Price locked at time of invoice']
+  amount        decimal(10,2)
 
   Note: 'Individual line items sold on a customer invoice.'
 }
 
 Table Payment {
-  PaymentID   varchar     [pk]
-  CInvID      varchar     [not null, ref: > CustomerInvoice.CInvID]
-  RecordedBy  varchar     [not null, ref: > User.UID]
-  PaymentDate date        [not null]
-  Amount      decimal(10,2) [not null]
-  Method      varchar     [note: 'Cash / UPI / Bank Transfer / Cheque']
-  Reference   varchar     [note: 'UTR, cheque number, or transaction ID']
-  Notes       text
+  payment_id   varchar     [pk]
+  cinv_id      varchar     [not null, ref: > CustomerInvoice.cinv_id]
+  recorded_by  varchar     [not null, ref: > User.uid]
+  payment_date date        [not null]
+  amount       decimal(10,2) [not null]
+  method       varchar     [note: 'Cash / UPI / Bank Transfer / Cheque']
+  reference    varchar     [note: 'UTR, cheque number, or transaction ID']
+  notes        text
 
   Note: 'Each row is one payment event. Multiple payments per invoice support partial settlement.'
 }
 
 Table Dispatch {
-  DispatchID   varchar [pk]
-  CInvID       varchar [not null, ref: > CustomerInvoice.CInvID]
-  DispatchedBy varchar [not null, ref: > User.UID]
-  DispatchDate date    [not null]
-  Carrier      varchar
-  Status       varchar [note: 'Pending / Dispatched / Delivered']
+  dispatch_id   varchar [pk]
+  cinv_id       varchar [not null, ref: > CustomerInvoice.cinv_id]
+  dispatched_by varchar [not null, ref: > User.uid]
+  dispatch_date date    [not null]
+  carrier       varchar
+  status        varchar [note: 'Pending / Dispatched / Delivered']
 
   Note: 'Records when and how goods leave the godown for a given invoice.'
 }
 
 Table CustomerReturn {
-  CReturnID   varchar [pk]
-  CInvID      varchar [not null, ref: > CustomerInvoice.CInvID]
-  InitiatedBy varchar [not null, ref: > User.UID]
-  ReturnDate  date    [not null]
-  Reason      varchar
-  Status      varchar [note: 'Pending / Processed / Refunded']
+  c_return_id   varchar [pk]
+  cinv_id       varchar [not null, ref: > CustomerInvoice.cinv_id]
+  initiated_by  varchar [not null, ref: > User.uid]
+  return_date   date    [not null]
+  reason        varchar
+  status        varchar [note: 'Pending / Processed / Refunded']
 
   Note: 'Records goods returned by a customer. Linked to originating invoice.'
 }
 
 Table CustomerReturnDetail {
-  CRDetailID   varchar     [pk]
-  CReturnID    varchar     [not null, ref: > CustomerReturn.CReturnID]
-  SKUID        varchar     [not null, ref: > SKU.SKUID]
-  ReturnQty    int         [not null]
-  RefundAmount decimal(10,2)
+  cr_detail_id   varchar     [pk]
+  c_return_id    varchar     [not null, ref: > CustomerReturn.c_return_id]
+  skuid          varchar     [not null, ref: > SKU.skuid]
+  return_qty     int         [not null]
+  refund_amount  decimal(10,2)
 
   Note: 'Line items of a customer return. Processing triggers a positive StockAdjustment.'
+}
+
+Table DeliveryReceipt {
+  receipt_id    varchar [pk]
+  cinv_id       varchar [not null, ref: > CustomerInvoice.cinv_id]
+  received_by   varchar [not null, ref: > User.uid]
+  received_date date    [not null]
+  notes         text
+
+  Note: 'Customer confirmation of goods received for a given invoice.'
+}
+
+Table DeliveryReceiptDetail {
+  dr_detail_id  varchar [pk]
+  receipt_id    varchar [not null, ref: > DeliveryReceipt.receipt_id]
+  skuid         varchar [not null, ref: > SKU.skuid]
+  received_qty  int     [not null]
+  condition     varchar [note: 'Good / Damaged / Wrong Item']
+
+  Note: 'Line items confirming receipt of individual SKUs.'
 }
 
 
@@ -233,13 +289,13 @@ Table CustomerReturnDetail {
 // ══════════════════════════════════════════════
 
 Table StockAdjustment {
-  AdjID      varchar [pk]
-  SKUID      varchar [not null, ref: > SKU.SKUID]
-  AdjustedBy varchar [not null, ref: > User.UID]
-  AdjDate    date    [not null]
-  Delta      int     [not null, note: 'Positive = stock added, Negative = stock removed']
-  Reason     varchar [note: 'Damage / Write-off / Opening Stock / Manual Correction / Return']
-  RefDocID   varchar [note: 'Optional FK to VendorReturn.VReturnID or CustomerReturn.CReturnID']
+  adj_id      varchar [pk]
+  skuid       varchar [not null, ref: > SKU.skuid]
+  adjusted_by varchar [not null, ref: > User.uid]
+  adj_date    date    [not null]
+  delta       int     [not null, note: 'Positive = stock added, Negative = stock removed']
+  reason      varchar [note: 'Damage / Write-off / Opening Stock / Manual Correction / Return']
+  ref_doc_id  varchar [note: 'Optional FK to VendorReturn.v_return_id or CustomerReturn.c_return_id']
 
   Note: 'Immutable audit log for every stock change outside normal buy/sell flows.'
 }

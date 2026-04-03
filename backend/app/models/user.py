@@ -22,12 +22,14 @@ class User(db.Model):
     customer_profile    = db.relationship("Customer",        back_populates="user",            uselist=False)
     vendor_orders       = db.relationship("VendorOrder",     back_populates="creator",         lazy="dynamic")
     customer_orders     = db.relationship("CustomerOrder",   back_populates="creator",         lazy="dynamic")
+    packing_slips       = db.relationship("PackingSlip",     back_populates="packer",          lazy="dynamic")
     customer_invoices   = db.relationship("CustomerInvoice", back_populates="creator",         lazy="dynamic")
     payments            = db.relationship("Payment",         back_populates="recorder",        lazy="dynamic")
     dispatches          = db.relationship("Dispatch",        back_populates="dispatcher",      lazy="dynamic")
     vendor_returns      = db.relationship("VendorReturn",    back_populates="initiator",       lazy="dynamic")
     customer_returns    = db.relationship("CustomerReturn",  back_populates="initiator",       lazy="dynamic")
     stock_adjustments   = db.relationship("StockAdjustment", back_populates="adjuster",        lazy="dynamic")
+    delivery_receipts   = db.relationship("DeliveryReceipt", back_populates="receiver",        lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<User {self.uid} – {self.full_name}>"

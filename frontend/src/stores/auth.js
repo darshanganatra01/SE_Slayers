@@ -118,10 +118,10 @@ export const useAuthStore = defineStore('auth', () => {
     return payload.user
   }
 
-  const register = async ({ full_name, email, password, contact }) => {
+  const register = async ({ full_name, email, password, contact, location, pincode }) => {
     const payload = await request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ full_name, email, password, contact }),
+      body: JSON.stringify({ full_name, email, password, contact, location, pincode }),
     })
 
     persistSession(payload.token, payload.user)

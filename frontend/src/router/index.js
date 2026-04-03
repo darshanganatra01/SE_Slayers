@@ -27,6 +27,8 @@ export const routes = [
       { path: 'checkout', name: 'store-checkout', meta: { requiresAuth: true, allowedRoles: ['customer'] }, component: () => import('../customer_dashboard/pages/Checkout.vue') },
       { path: 'orders', name: 'store-orders', meta: { requiresAuth: true, allowedRoles: ['customer'] }, component: () => import('../customer_dashboard/pages/Orders.vue') },
       { path: 'order/:coId', name: 'store-order', meta: { requiresAuth: true, allowedRoles: ['customer'] }, component: () => import('../customer_dashboard/pages/TransactionDetails.vue') },
+      { path: 'invoice/:invId', name: 'store-invoice', meta: { requiresAuth: true, allowedRoles: ['customer'] }, component: () => import('../customer_dashboard/pages/InvoiceDetail.vue') },
+      { path: 'item/:codId', name: 'store-item', meta: { requiresAuth: true, allowedRoles: ['customer'] }, component: () => import('../customer_dashboard/pages/ItemDetail.vue') },
       { path: 'login', name: 'store-login', meta: { guestOnly: true }, component: loginRoute },
       { path: 'register', name: 'store-register', meta: { guestOnly: true }, component: () => import('../customer_dashboard/pages/Register.vue') },
       { path: ':pathMatch(.*)*', name: 'store-not-found', component: () => import('../customer_dashboard/pages/NotFound.vue') }

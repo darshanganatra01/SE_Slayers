@@ -9,12 +9,12 @@
 
       <div class="flex items-center gap-2">
         <Button variant="ghost" size="sm" as-child>
-          <RouterLink to="/store/cart">
+          <RouterLink to="/store/cart" class="relative flex items-center">
             <ShoppingCart class="mr-1 h-4 w-4" />
             Cart
             <span
               v-if="cartStore.totalItems > 0"
-              class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+              class="absolute -left-3 -top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
             >
               {{ cartStore.totalItems }}
             </span>

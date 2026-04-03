@@ -117,6 +117,10 @@ export default {
     return { store }
   },
 
+  mounted() {
+    this.store.fetchOrders()
+  },
+
   data() {
     return {
       SC, SL,
@@ -177,16 +181,21 @@ export default {
 
 // In management.vue — replace handlePromote with this:
 
-    handlePromote({ id, newStatus, transport, updatedItems }) {
-      this.store.promote(id, newStatus, transport, updatedItems)
-      if (newStatus === 'packed') {
-        this.$refs.toast.show('📦', `${id} → Packed`, 'Quantities confirmed')
-      } else if (newStatus === 'shipped') {
-        this.$refs.toast.show('🚚', `${id} → Shipped`, transport || 'BlueDart Express')
+    async handlePromote({ id, newStatus, transport, updatedItems }) {
+      const success = await this.store.promote(id, newStatus, transport, updatedItems)
+      
+      if (success) {
+        if (newStatus === 'packed') {
+          this.$refs.toast.show('📦', `${id} → Packed`, 'Quantities confirmed')
+        } else if (newStatus === 'shipped') {
+          this.$refs.toast.show('🚚', `${id} → Shipped`, transport || 'BlueDart Express')
+        } else {
+          this.$refs.toast.show('↩', `${id} moved back`, SL[newStatus])
+        }
+        this.activeStatus = newStatus
       } else {
-        this.$refs.toast.show('↩', `${id} moved back`, SL[newStatus])
+        this.$refs.toast.show('❌', `Update failed`, this.store.error || 'Please try again')
       }
-      this.activeStatus = newStatus
     },
 
     handleNewOrder(formData) {

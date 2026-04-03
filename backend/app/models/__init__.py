@@ -13,6 +13,7 @@ from app.models.vendor_invoice import (                              # noqa
 from app.models.vendor_return import VendorReturn, VendorReturnDetail  # noqa
 from app.models.customer import Customer                             # noqa
 from app.models.customer_order import CustomerOrder                  # noqa
+from app.models.customer_order_detail import CustomerOrderDetail    # noqa
 from app.models.customer_invoice import (                            # noqa
     CustomerInvoice,
     CustomerInvDetail,
@@ -23,4 +24,9 @@ from app.models.customer_return import (                             # noqa
     CustomerReturn,
     CustomerReturnDetail,
 )
+from app.models.packing_slip import PackingSlip, PackingSlipDetail      # noqa
 from app.models.stock_adjustment import StockAdjustment              # noqa
+from app.models.delivery_receipt import (                             # noqa
+    DeliveryReceipt,
+    DeliveryReceiptDetail,
+)

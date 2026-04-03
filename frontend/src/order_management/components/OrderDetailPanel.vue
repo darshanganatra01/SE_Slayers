@@ -26,7 +26,10 @@
         <div>
           <div class="dp-sec-label">Items ({{ order.items.length }})</div>
           <div v-for="(it, i) in order.items" :key="i" class="dp-item-row">
-            <span>{{ it.name }}</span>
+            <div class="dp-item-info">
+              <div class="dp-item-name">{{ it.name }}</div>
+              <div v-if="it.specs" class="dp-item-specs">{{ it.specs }}</div>
+            </div>
             <span class="item-qty">
               Qty: {{ it.qty || 1 }}
               <span v-if="it.originalQty && it.qty !== it.originalQty" class="qty-changed">
@@ -36,13 +39,8 @@
           </div>
         </div>
 
-        <div v-if="order.status === 'packed'">
-          <div class="dp-sec-label">Packing</div>
-          <div class="dp-kv"><span class="k">Packages</span> <span class="v">{{ order.packages || 1 }}</span></div>
-          <div class="dp-kv"><span class="k">Cost</span>     <span class="v">{{ order.packagingCost || '—' }}</span></div>
-        </div>
 
-        <div v-if="order.status === 'shipped'">
+        <div v-if="order.status === 'shipped' && (!order.packing_slips || !order.packing_slips.length)">
           <div class="dp-sec-label">Shipping</div>
           <div class="dp-kv"><span class="k">Carrier</span> <span class="v">{{ order.transport || '—' }}</span></div>
         </div>
@@ -65,11 +63,21 @@
           → Mark as {{ SL[nextStatus] }}
         </button>
         <button
-          v-if="order.status !== 'inprocess'"
+          v-if="order.status === 'packed'"
           class="dp-action-btn dp-btn-back"
-          @click="$emit('promote', { id: order.id, newStatus: prevStatus })"
+          @click="onBackClick"
         >
           ← Back to {{ SL[prevStatus] }}
+        </button>
+        <button
+          v-if="order.status === 'shipped'"
+          class="dp-action-btn"
+          :class="order.is_received ? 'dp-btn-back' : 'dp-btn-fwd'"
+          :disabled="order.is_received || isMarkingReceived"
+          @click="handleMarkReceived"
+        >
+          <span v-if="order.is_received">✓ Order Received</span>
+          <span v-else>{{ isMarkingReceived ? 'Processing...' : '→ Mark as Received' }}</span>
         </button>
       </div>
 
@@ -118,8 +126,9 @@
 </template>
 
 <script>
-import { CC, CB, CL, PC, PB, SC, SL } from '../store.js'
-import PackingModal from './PackingModal.vue'
+import { CC, CB, CL, PC, PB, SC, SL, useOrderStore } from '../store.js'
+import { useAuthStore } from '@/stores/auth'
+import PackingModal from './Packingmodal.vue'
 
 export default {
   name: 'OrderDetailPanel',
@@ -134,8 +143,13 @@ export default {
       steps: ['inprocess', 'packed', 'shipped'],
       showPackingModal:   false,
       showTransportModal: false,
-      selectedTransport:  ''
+      selectedTransport:  '',
+      isMarkingReceived: false
     }
+  },
+  setup() {
+    const store = useOrderStore();
+    return { store };
   },
   computed: {
     currentStep() { return this.steps.indexOf(this.order?.status) },
@@ -143,39 +157,77 @@ export default {
     prevStatus()  { return this.steps[this.currentStep - 1] }
   },
   methods: {
+    async onBackClick() {
+      if (this.order.status === 'packed' && this.order.pslip_ids) {
+        if (!confirm('Are you sure you want to unpack this order?')) return
+        for (const pslip_id of this.order.pslip_ids) {
+          await this.store.unpack(pslip_id)
+        }
+      } else {
+        this.$emit('promote', { id: this.order.id, newStatus: this.prevStatus })
+      }
+    },
     onForwardClick() {
       if (this.nextStatus === 'packed') {
-        // Show packing qty modal
         this.showPackingModal = true
       } else if (this.nextStatus === 'shipped') {
-        // Show transport modal
         this.selectedTransport = ''
         this.showTransportModal = true
       } else {
         this.$emit('promote', { id: this.order.id, newStatus: this.nextStatus })
       }
     },
-
     confirmPack(updatedItems) {
-      // Emit promote with updated quantities so store can apply them
       this.$emit('promote', {
-        id:           this.order.id,
-        newStatus:    'packed',
-        updatedItems  // array of { name, qty }
+        id: this.order.id,
+        newStatus: 'packed',
+        updatedItems
       })
       this.showPackingModal = false
     },
-
-    confirmShipAndInvoice() {
+    async confirmShipAndInvoice() {
       if (!this.selectedTransport) return
-      this.$emit('promote', {
-        id:        this.order.id,
-        newStatus: 'shipped',
-        transport: this.selectedTransport
-      })
+      
+      const pslip_ids = this.order.pslip_ids || []
+      if (pslip_ids.length === 0) {
+        alert('No packed items to ship.')
+        this.showTransportModal = false
+        return
+      }
+
+      for (const pslip_id of pslip_ids) {
+        await this.store.ship(pslip_id, this.selectedTransport)
+      }
+      
       this.downloadInvoice(this.order)
       this.showTransportModal = false
-      this.selectedTransport  = ''
+      this.selectedTransport = ''
+    },
+    async handleMarkReceived() {
+      if (!this.order.cinv_ids || this.order.cinv_ids.length === 0) {
+        alert('No invoices found for this order.')
+        return
+      }
+      if (!confirm('Mark this entire shipment as received by the customer?')) return
+
+      this.isMarkingReceived = true
+      try {
+        const authStore = useAuthStore()
+        for (const cinv_id of this.order.cinv_ids) {
+          const res = await fetch('/api/internal-portal/receive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cinv_id, uid: authStore.user.uid })
+          })
+          if (!res.ok) throw new Error('Failed to mark one or more invoices as received')
+        }
+        alert('Items marked as received.')
+        await this.store.fetchOrders()
+      } catch (e) {
+        alert(e.message)
+      } finally {
+        this.isMarkingReceived = false
+      }
     },
     downloadInvoice(order) {
       const lines = order.items.map(it =>
@@ -226,7 +278,7 @@ export default {
       a.click()
       URL.revokeObjectURL(url)
     }
-      }
+  }
 }
 </script>
 
@@ -238,7 +290,7 @@ export default {
   display: flex; flex-direction: column;
   transition: width 0.24s cubic-bezier(0.4,0,0.2,1);
 }
-.dp.open { width: 300px; }
+.dp.open { width: 420px; }
 
 .dp-head { padding: 14px 18px 12px; border-bottom: 1.5px solid var(--border); flex-shrink: 0; }
 .dp-close-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -270,12 +322,15 @@ export default {
 .dp-kv .v   { color: var(--ink); font-weight: 500; }
 
 .dp-item-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 10px; border-radius: 6px; font-size: 12px;
-  background: var(--surface); border: 1px solid var(--border-2); margin-bottom: 4px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 8px 12px; border-radius: 6px; font-size: 12px;
+  background: var(--surface); border: 1px solid var(--border-2); margin-bottom: 6px;
 }
 .dp-item-row:last-child { margin-bottom: 0; }
-.item-qty     { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; }
+.dp-item-info  { display: flex; flex-direction: column; gap: 2px; }
+.dp-item-name  { font-weight: 600; color: var(--ink); }
+.dp-item-specs { font-size: 10.5px; color: var(--ink-4); line-height: 1.4; }
+.item-qty      { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
 .qty-changed  { color: var(--amber); font-size: 10px; font-weight: 600; }
 
 .dp-footer { padding: 12px 18px; border-top: 1.5px solid var(--border); flex-shrink: 0; }
@@ -303,6 +358,32 @@ export default {
 .dp-btn-fwd:hover  { background: #1d4ed8; }
 .dp-btn-back       { background: transparent; border: 1.5px solid var(--border) !important; color: var(--ink-2); }
 .dp-btn-back:hover { border-color: var(--ink) !important; color: var(--ink); }
+
+/* Slip Box */
+.slip-box {
+  background: var(--stone-50); border: 1.5px solid var(--border-2);
+  border-radius: 8px; padding: 12px; margin-bottom: 12px;
+}
+.slip-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.slip-id   { font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 600; color: var(--blue); }
+.slip-status {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 2px 6px; border-radius: 4px;
+}
+.slip-status.packed  { background: #fef3c7; color: #d97706; }
+.slip-status.shipped { background: #dcfce7; color: #16a34a; }
+.slip-date  { font-size: 10.5px; color: var(--ink-4); margin-bottom: 8px; }
+.slip-items { border-top: 1px solid var(--border-2); padding-top: 8px; margin-bottom: 10px; }
+.slip-item  { font-size: 11.5px; color: var(--ink-2); padding: 2px 0; }
+.slip-actions { display: flex; gap: 8px; align-items: center; }
+.slip-btn {
+  padding: 5px 10px; border-radius: 5px; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.12s; border: 1.5px solid var(--border); background: #fff;
+  display: flex; align-items: center; gap: 4px;
+}
+.slip-btn.ship:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+.slip-btn.unpack:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.shipped-note { font-size: 11px; font-weight: 600; color: var(--green); display: flex; align-items: center; gap: 4px; }
 
 /* Transport modal */
 .tr-overlay {

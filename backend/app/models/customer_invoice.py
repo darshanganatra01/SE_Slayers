@@ -10,19 +10,21 @@ class CustomerInvoice(db.Model):
     __tablename__ = "customer_invoices"
 
     cinv_id      = db.Column(db.String, primary_key=True)
-    coid         = db.Column(db.String, db.ForeignKey("customer_orders.coid"), nullable=False)
+    pslip_id     = db.Column(db.String, db.ForeignKey("packing_slips.pslip_id"), nullable=False)
     created_by   = db.Column(db.String, db.ForeignKey("users.uid"),            nullable=False)
     invoice_date = db.Column(db.Date,   nullable=False)
     status       = db.Column(db.String)  # Unpaid / PartiallyPaid / Paid
+    total_amount = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
-    customer_order = db.relationship("CustomerOrder",  back_populates="invoices")
-    creator        = db.relationship("User",           back_populates="customer_invoices")
+    packing_slip = db.relationship("PackingSlip",  back_populates="invoices")
+    creator      = db.relationship("User",           back_populates="customer_invoices")
     details        = db.relationship("CustomerInvDetail", back_populates="customer_invoice", lazy="dynamic",
                                      cascade="all, delete-orphan")
     payments       = db.relationship("Payment",        back_populates="customer_invoice", lazy="dynamic")
     dispatches     = db.relationship("Dispatch",       back_populates="customer_invoice", lazy="dynamic")
     returns        = db.relationship("CustomerReturn", back_populates="customer_invoice", lazy="dynamic")
+    delivery_receipts = db.relationship("DeliveryReceipt", back_populates="customer_invoice", lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<CustomerInvoice {self.cinv_id}>"
@@ -39,6 +41,7 @@ class CustomerInvDetail(db.Model):
     ordered_qty   = db.Column(db.Integer)
     delivered_qty = db.Column(db.Integer)         # May be less for partial fulfillment
     sale_price    = db.Column(db.Numeric(10, 2))  # Locked at time of invoice
+    amount        = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     customer_invoice = db.relationship("CustomerInvoice", back_populates="details")

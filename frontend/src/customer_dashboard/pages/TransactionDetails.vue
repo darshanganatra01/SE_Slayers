@@ -4,7 +4,8 @@
       ← Back to Orders
     </Button>
 
-    <div v-if="!orderData" class="container py-10 text-center text-muted-foreground">Order not found.</div>
+    <div v-if="isLoading" class="container py-10 text-center text-muted-foreground">Loading...</div>
+    <div v-else-if="!orderData" class="container py-10 text-center text-muted-foreground">Order not found.</div>
 
     <template v-else>
       <h1 class="mb-1 text-2xl font-bold text-foreground">Order #{{ orderData.order.coId }}</h1>
@@ -53,24 +54,17 @@
       <Card>
         <CardHeader><CardTitle>Transaction Info</CardTitle></CardHeader>
         <CardContent class="space-y-3 text-sm">
-          <div class="flex items-center justify-between">
-            <span class="text-muted-foreground">Invoice</span>
-            <div class="flex items-center gap-2">
-              <span class="font-medium">{{ orderData.invoice.cInvId }}</span>
-              <Badge :variant="orderData.invoice.status === 'Paid' ? 'default' : 'secondary'">{{ orderData.invoice.status }}</Badge>
-              <Button variant="ghost" size="icon" class="h-7 w-7"><FileText class="h-3.5 w-3.5" /></Button>
-            </div>
+          <div v-if="!orderData.invoices || orderData.invoices.length === 0" class="text-muted-foreground text-center py-2">
+            No invoices generated yet.
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-muted-foreground">Delivery Challan</span>
+          <div v-for="inv in orderData.invoices" :key="inv.cInvId" class="flex items-center justify-between py-1 border-b last:border-0">
+            <span class="text-muted-foreground">Invoice #{{ inv.cInvId }}</span>
             <div class="flex items-center gap-2">
-              <span class="font-medium">DC-{{ orderData.order.coId }}</span>
-              <Button variant="ghost" size="icon" class="h-7 w-7"><Truck class="h-3.5 w-3.5" /></Button>
+              <Badge :variant="inv.status === 'Paid' ? 'default' : 'secondary'">{{ inv.status }}</Badge>
+              <Button variant="ghost" size="icon" class="h-8 w-8" @click="router.push(`/store/invoice/${inv.cInvId}`)">
+                <FileText class="h-4 w-4" />
+              </Button>
             </div>
-          </div>
-          <div v-if="orderData.invoice.status === 'Paid'" class="flex items-center justify-between">
-            <span class="text-muted-foreground">UPI Transaction ID</span>
-            <span class="font-medium font-mono text-xs">UPI{{ orderData.order.coId }}XYZ{{ randomSuffix }}</span>
           </div>
         </CardContent>
       </Card>
@@ -79,9 +73,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getOrdersWithDetails } from '@cd/data/mockData'
+import { getOrderDetails } from '@cd/data/api'
 import Button from '@cd/components/ui/Button.vue'
 import Card from '@cd/components/ui/Card.vue'
 import CardContent from '@cd/components/ui/CardContent.vue'
@@ -89,16 +83,25 @@ import CardHeader from '@cd/components/ui/CardHeader.vue'
 import CardTitle from '@cd/components/ui/CardTitle.vue'
 import Badge from '@cd/components/ui/Badge.vue'
 import OrderTimeline from '@cd/components/OrderTimeline.vue'
-import { FileText, Truck } from 'lucide-vue-next'
+import { FileText } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 
 const coId = computed(() => route.params.coId as string)
 
-const orders = getOrdersWithDetails()
-const orderData = computed(() => orders.find(o => o.order.coId === coId.value))
-const randomSuffix = Math.floor(Math.random() * 9000 + 1000)
+const orderData = ref<any>(null)
+const isLoading = ref(true)
+
+onMounted(async () => {
+  try {
+    orderData.value = await getOrderDetails(coId.value)
+  } catch (e) {
+    console.error("Failed to load order details", e)
+  } finally {
+    isLoading.value = false
+  }
+})
 
 const getSpecSize = (specsString: string) => {
   try {

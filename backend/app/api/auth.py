@@ -22,6 +22,8 @@ register_model = auth_ns.model(
         "email": fields.String(required=True),
         "password": fields.String(required=True),
         "contact": fields.String(required=False),
+        "location": fields.String(required=False),
+        "pincode": fields.Integer(required=False),
     },
 )
 
@@ -36,11 +38,13 @@ def _validate_login_payload(payload: dict) -> tuple[str, str]:
     return email, password
 
 
-def _validate_register_payload(payload: dict) -> tuple[str, str, str, str | None]:
+def _validate_register_payload(payload: dict) -> tuple[str, str, str, str | None, str | None, int | None]:
     full_name = (payload.get("full_name") or "").strip()
     email = (payload.get("email") or "").strip().lower()
     password = payload.get("password") or ""
     contact = payload.get("contact")
+    location = payload.get("location")
+    pincode = payload.get("pincode")
 
     if not full_name:
         raise AuthError("Full name is required.", status_code=400)
@@ -48,7 +52,15 @@ def _validate_register_payload(payload: dict) -> tuple[str, str, str, str | None
         raise AuthError("Email is required.", status_code=400)
     if not password:
         raise AuthError("Password is required.", status_code=400)
-    return full_name, email, password, contact
+    
+    # Optional pincode conversion if sent as string
+    if pincode is not None and not isinstance(pincode, int):
+        try:
+            pincode = int(pincode)
+        except (ValueError, TypeError):
+            pincode = None
+
+    return full_name, email, password, contact, location, pincode
 
 
 @auth_ns.errorhandler(AuthError)
@@ -78,12 +90,14 @@ class RegisterResource(Resource):
     @auth_ns.expect(register_model, validate=False)
     def post(self):
         payload = request.get_json(silent=True) or {}
-        full_name, email, password, contact = _validate_register_payload(payload)
+        full_name, email, password, contact, location, pincode = _validate_register_payload(payload)
         user = register_customer(
             full_name=full_name,
             email=email,
             password=password,
             contact=contact,
+            location=location,
+            pincode=pincode,
         )
         db.session.add(user)
         db.session.commit()

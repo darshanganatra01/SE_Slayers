@@ -14,14 +14,17 @@ class CustomerOrder(db.Model):
     cid        = db.Column(db.String, db.ForeignKey("customers.cid"), nullable=False)
     created_by = db.Column(db.String, db.ForeignKey("users.uid"),     nullable=False)
     order_date = db.Column(db.Date,   nullable=False)
-    status     = db.Column(db.String)  # Draft / Confirmed / PartiallyFulfilled / Completed / Cancelled
-    priority   = db.Column(db.String)  # High / Medium / Low — inherits Customer.Category by default
+    status       = db.Column(db.String)  # Draft / Confirmed / Packed / Dispatched
+    priority     = db.Column(db.String)  # High / Medium / Low — inherits Customer.Category by default
+    total_amount = db.Column(db.Numeric(10, 2))
 
     # ── Relationships ─────────────────────────────────────────────
     customer = db.relationship("Customer",        back_populates="orders")
     creator  = db.relationship("User",            back_populates="customer_orders")
-    invoices = db.relationship("CustomerInvoice", back_populates="customer_order", lazy="dynamic",
+    details  = db.relationship("CustomerOrderDetail", back_populates="customer_order", lazy="dynamic",
                                cascade="all, delete-orphan")
+    packing_slips = db.relationship("PackingSlip", back_populates="customer_order", lazy="dynamic",
+                                    cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<CustomerOrder {self.coid}>"
