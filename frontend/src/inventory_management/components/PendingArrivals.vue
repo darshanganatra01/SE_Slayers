@@ -7,6 +7,7 @@
       </div>
       <span class="panel-link">View all orders →</span>
     </div>
+    <div v-if="!orders.length" class="empty-state">No pending stock arrivals yet.</div>
     <div
       v-for="(o, i) in orders"
       :key="i"
@@ -52,6 +53,12 @@ export default {
 .panel-link  {
   font-size: 12px; font-weight: 500;
   color: var(--blue); cursor: pointer;
+}
+.empty-state {
+  padding: 24px 16px;
+  font-size: 12.5px;
+  color: var(--ink-4);
+  text-align: center;
 }
 
 .por {

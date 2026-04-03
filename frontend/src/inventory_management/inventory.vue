@@ -23,6 +23,7 @@
         :total="store.totalCount"
         :in-stock="store.inStockCount"
         :low-stock="store.lowStockCount"
+        :inventory-value="store.inventoryValue"
       />
 
       <!-- Tabs -->
@@ -46,6 +47,8 @@
         :search="searchQ"
         @go-vendor="goVendor"
       />
+
+      <div v-if="store.error" class="inv-error">{{ store.error }}</div>
 
       <PortfolioTable
         v-if="curTab === 'portfolio'"
@@ -84,6 +87,7 @@
 </template>
 
 <script>
+import { onMounted } from 'vue'
 import { useInventoryStore } from './store.js'
 import AppTopbar       from '../components/AppTopbar.vue'
 import AppSearchbar    from '../components/AppSearchbar.vue'
@@ -107,6 +111,9 @@ export default {
 
   setup() {
     const store = useInventoryStore()
+    onMounted(() => {
+      store.fetchOverview()
+    })
     return { store }
   },
 
@@ -122,7 +129,10 @@ export default {
 
   computed: {
     headMeta() {
-      return `21 Mar 2026 · ${this.store.totalCount} parts`
+      const label = this.store.asOfDate
+        ? new Date(this.store.asOfDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      return `${label} · ${this.store.totalCount} parts`
     },
     tabs() {
       return [
@@ -206,5 +216,13 @@ export default {
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   flex-shrink: 0;
+}
+.inv-error {
+  padding: 12px 14px;
+  border: 1.5px solid #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 13px;
 }
 </style>

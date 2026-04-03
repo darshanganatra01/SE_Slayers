@@ -6,6 +6,7 @@
         <div class="panel-sub">Dispatches &amp; receipts</div>
       </div>
     </div>
+    <div v-if="!history.length" class="empty-state">No stock updates yet.</div>
     <div v-for="(h, i) in history" :key="i" class="hr">
       <div
         class="hdot"
@@ -47,6 +48,12 @@ export default {
 }
 .panel-title { font-size: 13px; font-weight: 600; }
 .panel-sub   { font-size: 11.5px; color: var(--ink-4); margin-top: 2px; }
+.empty-state {
+  padding: 24px 16px;
+  font-size: 12.5px;
+  color: var(--ink-4);
+  text-align: center;
+}
 
 .hr {
   display: flex; align-items: flex-start;
