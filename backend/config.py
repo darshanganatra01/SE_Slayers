@@ -1,4 +1,5 @@
 import os
+from sqlalchemy.pool import NullPool
 
 
 class Config:
@@ -12,6 +13,10 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     RESTX_MASK_SWAGGER = False          # disable X-Fields header in Swagger UI
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "poolclass": NullPool,
+    }
 
 
 class DevelopmentConfig(Config):

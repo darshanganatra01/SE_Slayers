@@ -77,6 +77,7 @@
 
     <AddPartModal
       :visible="showAddModal"
+      :categories="store.categories"
       @close="showAddModal = false"
       @submit="handleAddPart"
     />
@@ -144,8 +145,8 @@ export default {
       ]
     },
     profitData() {
-      if (!this.profitPopupKey) return { title: '', sku: '', total: '', rows: [] }
-      return this.store.profData[this.profitPopupKey] || { title: '', sku: '', total: '', rows: [] }
+      if (!this.profitPopupKey) return { title: '', category: '', rows: [] }
+      return this.store.profData[this.profitPopupKey] || { title: '', category: '', rows: [] }
     }
   },
 
