@@ -126,7 +126,6 @@
                   <p class="text-xs text-muted-foreground">Quantity</p>
                   <p class="font-bold text-foreground">{{ item.quantity }}</p>
                 </div>
-                <Badge :variant="statusVariant(item.status)">{{ item.status }}</Badge>
               </div>
             </div>
           </CardContent>
