@@ -49,6 +49,23 @@ def create_app(config_name: str | None = None) -> Flask:
         print(f"  vendor_products: {seeded['vendor_products']}")
         print(f"  skus: {seeded['skus']}")
 
+    @app.cli.command("reset-db")
+    def reset_db_command():
+        from app.catalog_seeds import seed_catalog_from_csv
+        from app.seeds import seed_auth_users
+        
+        print("Destroying entire database...")
+        db.drop_all()
+        print("Recreating clean tables...")
+        db.create_all()
+        
+        print("Seeding fresh catalog...")
+        seed_catalog_from_csv()
+        
+        print("Seeding default auth users...")
+        seed_auth_users()
+        print("Database completely reset and re-seeded successfully! You have a 100% fresh start.")
+
     # ── Import models so Alembic can detect them ──────────────────
     from app import models  # noqa: F401
 

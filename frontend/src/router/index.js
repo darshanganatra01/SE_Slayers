@@ -16,6 +16,7 @@ export const routes = [
   { path: '/customers', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: CustomerDashboard },
   { path: '/vendors', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: VendorManagement },
   { path: '/inventory', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: () => import('../inventory_management/inventory.vue') },
+  { path: '/ai-feature', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: () => import('../ai_feature/AIFeature.vue') },
   {
     path: '/store',
     meta: { hideShell: true },
