@@ -1,15 +1,9 @@
 <template>
   <div
     class="ocard"
-    :class="{ selected, dragging, 'drag-over-top': dragOverTop, 'drag-over-bottom': dragOverBottom }"
+    :class="{ selected }"
     :style="{ borderTopColor: CC[order.custType] }"
-    draggable="true"
     @click="$emit('select', order.id)"
-    @dragstart="onDragStart"
-    @dragend="onDragEnd"
-    @dragover.prevent="onDragOver"
-    @dragleave="onDragLeave"
-    @drop.prevent="onDrop"
   >
     <div class="oc-head">
       <span class="oc-id">{{ order.id }}</span>
@@ -37,7 +31,6 @@
     </div>
 
     <div v-if="order.status === 'shipped'" class="oc-extra">
-      <span>🚚 {{ order.transport || '—' }}</span>
       <button class="dl-invoice-btn" @click.stop="downloadInvoice(order)">Download Invoice</button>
     </div>
 
@@ -45,8 +38,6 @@
       <span class="oc-val">{{ order.value }}</span>
       <span class="oc-dl">Placed {{ order.placedOn  }}</span>
     </div>
-
-    <div class="drag-handle">⠿</div>
   </div>
 </template>
 
@@ -59,39 +50,11 @@ export default {
     order:    { type: Object,  required: true },
     selected: { type: Boolean, default: false }
   },
-  emits: ['select', 'drag-start', 'drag-end', 'reorder'],
+  emits: ['select'],
   data() {
-    return { CC, CB, PC, PB, dragging: false, dragOverTop: false, dragOverBottom: false }
+    return { CC, CB, PC, PB }
   },
   methods: {
-    onDragStart(e) {
-      this.dragging = true
-      e.dataTransfer.effectAllowed = 'move'
-      this.$emit('drag-start', this.order.id)
-    },
-    onDragEnd() {
-      this.dragging = false
-      this.dragOverTop = false
-      this.dragOverBottom = false
-      this.$emit('drag-end')
-    },
-    onDragOver(e) {
-      const rect = this.$el.getBoundingClientRect()
-      const mid  = rect.top + rect.height / 2
-      this.dragOverTop    = e.clientY < mid
-      this.dragOverBottom = e.clientY >= mid
-    },
-    onDragLeave() {
-      this.dragOverTop = false
-      this.dragOverBottom = false
-    },
-    onDrop(e) {
-      const rect = this.$el.getBoundingClientRect()
-      const mid  = rect.top + rect.height / 2
-      this.$emit('reorder', { toId: this.order.id, pos: e.clientY < mid ? 'before' : 'after' })
-      this.dragOverTop = false
-      this.dragOverBottom = false
-    },
 // ADD inside methods: {}
     downloadInvoice(order) {
       const lines = order.items.map(it =>
@@ -145,7 +108,8 @@ export default {
   background: var(--white);
   border: 1.5px solid var(--border-2);
   border-radius: 8px;
-  cursor: grab; user-select: none;
+  flex-shrink: 0;
+  cursor: pointer; user-select: none;
   transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
   position: relative; overflow: hidden;
   border-top: 2.5px solid transparent;
@@ -156,9 +120,6 @@ export default {
   box-shadow: 0 2px 12px rgba(0,0,0,.07);
   transform: translateY(-1px);
 }
-.ocard.dragging         { opacity: 0.3; cursor: grabbing; transform: scale(0.97); }
-.ocard.drag-over-top    { box-shadow: 0 -3px 0 0 var(--blue); }
-.ocard.drag-over-bottom { box-shadow: 0 3px 0 0 var(--blue); }
 .ocard.selected         { border-color: var(--blue) !important; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
 
 @keyframes fadeUp {
@@ -202,13 +163,6 @@ export default {
 }
 .oc-val { font-family: 'Geist Mono', monospace; font-size: 12.5px; font-weight: 500; color: var(--ink); }
 .oc-dl  { font-size: 10.5px; color: var(--ink-4); }
-
-.drag-handle {
-  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
-  color: var(--ink-4); font-size: 12px; opacity: 0;
-  transition: opacity 0.12s; cursor: grab; padding: 3px;
-}
-.ocard:hover .drag-handle { opacity: 0.5; }
 
 /* ADD at bottom of <style scoped> */
 .dl-invoice-btn {

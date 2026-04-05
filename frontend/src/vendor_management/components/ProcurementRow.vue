@@ -7,10 +7,10 @@
     <!-- ID -->
     <td class="pr-id">{{ req.id }}</td>
 
-    <!-- Part + Size -->
+    <!-- Part + Specification -->
     <td>
       <div class="pr-part">{{ req.partName }}</div>
-      <div class="pr-size">{{ req.size }}</div>
+      <div class="pr-size">{{ req.specification }}</div>
     </td>
 
     <!-- Date -->
@@ -19,8 +19,11 @@
     <!-- Vendor -->
     <td class="pr-vendor">{{ vendorName }}</td>
 
-    <!-- Qty -->
-    <td class="pr-qty">{{ req.quantity ? req.quantity + ' pcs' : '—' }}</td>
+    <!-- Lots / Qty -->
+    <td>
+      <div class="pr-qty">{{ lotLabel }}</div>
+      <div class="pr-qty-sub">{{ quantityLabel }}</div>
+    </td>
 
 
     <!-- Status -->
@@ -41,10 +44,22 @@ export default {
   emits: ['select'],
   computed: {
     statusClass() {
-      return this.req.status === 'received' ? 's-received' : 's-pending'
+      if (this.req.status === 'received') return 's-received'
+      if (this.req.status === 'cancelled') return 's-cancelled'
+      return 's-pending'
     },
     statusLabel() {
-      return this.req.status === 'received' ? 'Received' : 'Pending'
+      if (this.req.status === 'received') return 'Received'
+      if (this.req.status === 'cancelled') return 'Cancelled'
+      return 'Pending'
+    },
+    lotLabel() {
+      if (!this.req.lotCount) return '—'
+      return `${this.req.lotCount} lot${this.req.lotCount !== 1 ? 's' : ''}`
+    },
+    quantityLabel() {
+      if (!this.req.orderedQty) return '—'
+      return `${this.req.orderedQty} pcs`
     }
   }
 }
@@ -80,13 +95,25 @@ export default {
   color: var(--ink-4);
   font-family: 'Geist Mono', monospace;
   margin-top: 1px;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .pr-date   { color: var(--ink-3); font-size: 12px; }
 .pr-vendor { font-weight: 500; color: var(--ink); }
-.pr-qty    { font-family: 'Geist Mono', monospace; font-size: 12px; }
+.pr-qty {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  color: var(--ink);
+}
+.pr-qty-sub {
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: var(--ink-4);
+}
 
 /* Status chips */
 .s-pending  { background: var(--amber-dim); color: var(--amber); }
 .s-received { background: var(--green-dim); color: var(--green); }
+.s-cancelled { background: #fee2e2; color: #b91c1c; }
 </style>

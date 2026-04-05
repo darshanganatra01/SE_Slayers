@@ -145,14 +145,43 @@ export default {
       ]
     },
     profitData() {
-      if (!this.profitPopupKey) return { title: '', category: '', rows: [] }
-      return this.store.profData[this.profitPopupKey] || { title: '', category: '', rows: [] }
+      if (!this.profitPopupKey) return { key: '', title: '', category: '', rows: [] }
+      return {
+        key: this.profitPopupKey,
+        ...(this.store.profData[this.profitPopupKey] || { title: '', category: '', rows: [] })
+      }
     }
   },
 
   methods: {
-    goVendor(sku, size) {
-      alert(`→ Vendor procurement: ${sku} · ${size}`)
+    goVendor(target, size) {
+      if (target && typeof target === 'object' && target.source === 'procurement-history') {
+        this.$router.push({
+          name: 'vendors',
+          query: {
+            tab: 'procurement',
+            ...(target.procurementId ? { procurementId: target.procurementId } : {})
+          }
+        })
+        return
+      }
+      if (
+        target
+        && typeof target === 'object'
+        && target.partId
+        && target.specKey
+      ) {
+        this.$router.push({
+          name: 'vendors',
+          query: {
+            tab: 'compare',
+            partId: target.partId,
+            specKey: target.specKey,
+          }
+        })
+        return
+      }
+      alert(`→ Vendor procurement: ${target} · ${size}`)
     },
     openProfit(key) {
       this.profitPopupKey = key

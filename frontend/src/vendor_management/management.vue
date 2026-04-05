@@ -32,8 +32,9 @@
         >
           {{ tab.label }}
           <span
+            v-if="tab.key === 'procurement'"
             class="tab-count"
-            :class="{ active: activeTab === tab.key, 'tab-count-alert': tab.key === 'procurement' && procurementPendingCount > 0 }"
+            :class="{ active: activeTab === tab.key, 'tab-count-alert': procurementPendingCount > 0 }"
           >
             {{ tab.key === 'procurement' ? procurementPendingCount : tab.count }}
           </span>
@@ -64,10 +65,11 @@
         :loading="store.compareLoading"
         :error="store.compareError"
         :selected-part-id="selectedPartId"
-        @select="selectedPartId = $event"
+        @select="handleComparePartSelect"
       />
       <PartDetailPanel
         :part="selectedPart"
+        :preselected-size-key="compareSpecKey"
         @select-vendor="handleVendorSelected"
       />
     </div>
@@ -77,7 +79,10 @@
       <ProcurementHistory
         :procurements="store.procurements"
         :vendors="procurementVendors"
+        :loading="store.procurementLoading"
+        :error="store.procurementError"
         :selected-id="selectedProcurementId"
+        :marking-received-id="markingReceivedId"
         @select="selectedProcurementId = $event"
         @mark-received="handleMarkReceived"
       />
@@ -88,6 +93,7 @@
       :visible="showProcurement"
       :vendors="procurementVendors"
       :prefill="procurementPrefill"
+      :submitting="store.procurementSubmitting"
       @close="showProcurement = false"
       @submit="handleProcurement"
     />
@@ -131,17 +137,19 @@ export default {
       filterLeadTime: 'all',
       filterLocation: 'all',
       selectedPartId: null,
+      compareSpecKey: null,
       selectedVendorId: null,
       selectedProcurementId: null,
+      markingReceivedId: null,
 
       showProcurement:    false,
       procurementPrefill: null,
 
       tabs: [
-        { key: 'list',        label: 'Vendor List',           count: '—' },
-        { key: 'details',     label: 'Vendor Details',        count: '—' },
-        { key: 'compare',     label: 'Part Search & Compare', count: '—' },
-        { key: 'procurement', label: 'Procurement History',   count: '—' }
+        { key: 'list',        label: 'Vendor List' },
+        { key: 'details',     label: 'Vendor Details' },
+        { key: 'compare',     label: 'Part Search & Compare' },
+        { key: 'procurement', label: 'Procurement History' }
       ]
     }
   },
@@ -149,6 +157,7 @@ export default {
   mounted() {
     this.store.fetchVendorDirectory()
     this.store.fetchCompareCatalog()
+    this.store.fetchProcurements()
   },
 
   computed: {
@@ -168,10 +177,21 @@ export default {
     },
     procurementVendors() {
       const combined = [...this.store.directoryVendors]
-      for (const vendor of this.store.vendors) {
-        if (!combined.some(item => item.id === vendor.id)) {
-          combined.push(vendor)
+      for (const procurement of this.store.procurements) {
+        if (!procurement.vendorId || combined.some((item) => item.id === procurement.vendorId)) {
+          continue
         }
+        combined.push({
+          id: procurement.vendorId,
+          name: procurement.vendorName || procurement.vendorId,
+          prefix: '',
+          leadTime: procurement.vendorLeadTime,
+          location: procurement.vendorLocation || '—',
+          contact: { phone: '—', email: '—' },
+          parts: [],
+          products: [],
+          partCount: 0
+        })
       }
       return combined
     },
@@ -208,6 +228,15 @@ export default {
       handler(vendorId) {
         this.syncVendorRoute(typeof vendorId === 'string' ? vendorId : '')
       }
+    },
+    '$route.fullPath': {
+      immediate: true,
+      handler() {
+        this.syncCompareRoute()
+      }
+    },
+    'store.compareParts.length'() {
+      this.syncCompareRoute()
     }
   },
 
@@ -244,36 +273,82 @@ export default {
       }
     },
 
+    syncCompareRoute() {
+      if (this.$route.params.vendorId) return
+
+      const routeTab = typeof this.$route.query.tab === 'string' ? this.$route.query.tab : ''
+      if (routeTab === 'procurement') {
+        this.activeTab = 'procurement'
+        this.selectedProcurementId = typeof this.$route.query.procurementId === 'string'
+          ? this.$route.query.procurementId
+          : null
+        return
+      }
+      if (routeTab !== 'compare') return
+
+      this.activeTab = 'compare'
+      this.selectedPartId = typeof this.$route.query.partId === 'string' ? this.$route.query.partId : null
+      this.compareSpecKey = typeof this.$route.query.specKey === 'string' ? this.$route.query.specKey : null
+    },
+
     goBackToList() {
       this.$router.push({ name: 'vendors' })
+    },
+
+    handleComparePartSelect(partId) {
+      this.selectedPartId = partId
+      this.compareSpecKey = null
     },
 
     notifyAddVendorComingSoon() {
       this.$refs.toast.show('+', 'Vendor creation will be added later', 'This screen now uses live vendor data')
     },
 
-    // Called when user picks a vendor in PartDetailPanel → open procurement form
-    handleVendorSelected({ part, size, vendorId }) {
+    handleVendorSelected(selection) {
       this.procurementPrefill = {
-        partName: part.name,
-        partCode: size,
-        vendorId: vendorId
+        skuId: selection.skuId,
+        partName: selection.partName,
+        specification: selection.specification,
+        vendorId: selection.vendorId,
+        vendorName: selection.vendorName,
+        currentBuy: selection.currentBuy,
+        unitMeasurementBuy: selection.unitMeasurementBuy,
+        lotSize: selection.lotSize
       }
       this.showProcurement = true
     },
 
-    handleProcurement(formData) {
-      const newId = this.store.addProcurement(formData, formData.vendorId)
-      this.showProcurement = false
-      const vendorName = formData.vendorId
-        ? (this.store.findDirectoryVendorById(formData.vendorId)?.name || this.store.findVendorById(formData.vendorId)?.name || formData.vendorId)
-        : '—'
-      this.$refs.toast.show('📋', `${newId} submitted`, `${formData.partName} → ${vendorName}`)
+    async handleProcurement(formData) {
+      try {
+        const procurement = await this.store.createProcurement({
+          skuId: formData.skuId,
+          vendorId: formData.vendorId,
+          lotCount: formData.lotCount
+        })
+        this.showProcurement = false
+        this.activeTab = 'procurement'
+        this.selectedProcurementId = procurement.id
+        this.$refs.toast.show('📋', `${procurement.id} submitted`, `${procurement.partName} → ${procurement.vendorName}`)
+      } catch (error) {
+        this.$refs.toast.show('!', 'Unable to submit request', error.message || 'Please try again')
+      }
     },
 
-    handleMarkReceived(id) {
-      this.store.markReceived(id)
-      this.$refs.toast.show('✓', 'Order received', id)
+    async handleMarkReceived(id) {
+      if (!id || this.markingReceivedId === id) return
+
+      this.markingReceivedId = id
+      try {
+        const procurement = await this.store.markReceived(id)
+        this.selectedProcurementId = procurement.id
+        this.$refs.toast.show('✓', 'Order received', procurement.id)
+      } catch (error) {
+        this.$refs.toast.show('!', 'Unable to update request', error.message || 'Please try again')
+      } finally {
+        if (this.markingReceivedId === id) {
+          this.markingReceivedId = null
+        }
+      }
     }
   }
 }

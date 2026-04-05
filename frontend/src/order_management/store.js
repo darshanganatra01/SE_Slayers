@@ -39,7 +39,16 @@ export const useOrderStore = defineStore('orders', {
         const res = await fetch('/api/internal-portal/orders');
         if (!res.ok) throw new Error('Failed to fetch orders');
         const data = await res.json();
-        this.orders = data.orders || [];
+        let fetchedOrders = data.orders || [];
+        fetchedOrders.sort((a, b) => {
+          const limitA = new Date(a.placedOn || 0)
+          const limitB = new Date(b.placedOn || 0)
+          return limitA - limitB
+        })
+        fetchedOrders.forEach((o, i) => {
+          if (typeof o.order === 'undefined' || isNaN(o.order)) o.order = i
+        })
+        this.orders = fetchedOrders;
         this.inventory = data.inventory || {};
       } catch (e) {
         console.error('Failed fetching order data:', e);
@@ -97,14 +106,28 @@ export const useOrderStore = defineStore('orders', {
       }
     },
 
-    reorder(fromId, toId, pos) {
+    reorder(fromId, toId, pos, targetPriority) {
       const from = this.orders.find(o => o.id === fromId)
-      const to   = this.orders.find(o => o.id === toId)
-      if (!from || !to || from.status !== to.status) return
+      const to   = toId ? this.orders.find(o => o.id === toId) : null
+      
+      if (!from) return
+
+      if (!to && targetPriority) {
+        if (from.priority === targetPriority) return
+        from.priority = targetPriority
+        const currentList = this.orders.filter(o => o.status === from.status).sort((a, b) => a.order - b.order)
+        from.order = currentList.length ? currentList[currentList.length - 1].order + 1 : 0
+        return
+      }
+
+      if (!to || from.status !== to.status) return
+      
+      from.priority = to.priority
       let col = this.orders
         .filter(o => o.status === from.status)
         .sort((a, b) => a.order - b.order)
         .filter(o => o.id !== fromId)
+        
       const ti = col.findIndex(o => o.id === toId)
       col.splice(pos === 'before' ? ti : ti + 1, 0, from)
       col.forEach((o, i) => { o.order = i })
