@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import random
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -75,6 +76,7 @@ def seed_vendors() -> int:
 
         vendor.vendor_name = row["VendorName"].strip()
         vendor.vendor_prefix = _clean(row.get("VendorPrefix"))
+        vendor.lead_time = random.randint(3, 10)
         vendor.location = _clean(row.get("Location"))
         vendor.contact = _clean(row.get("Contact"))
         vendor.email = _clean(row.get("Email"))
@@ -124,7 +126,7 @@ def seed_skus() -> int:
         sku.lot_size_sell = _to_int(row.get("LotSizeSell"))
         sku.current_sell_rate = _compute_sell_price(buy_rate)
         sku.specs = json.loads(row["Specs_JSON"])
-        sku.stock_qty = 0
+        sku.stock_qty = random.randint(150, 500)
         sku.threshold = _to_int(row.get("Threshold"))
 
     db.session.commit()

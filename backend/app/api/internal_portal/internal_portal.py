@@ -498,6 +498,23 @@ class InternalShipResource(Resource):
             
         order = db.session.query(CustomerOrder).filter_by(coid=slip.coid).first()
         
+        # 0. Validate Stock Constraints First
+        for ps_detail in slip.details:
+            sku = db.session.query(SA_SKU).filter_by(skuid=ps_detail.skuid).first()
+            if sku:
+                unit_sell = sku.unit_measurement_sell or 1
+                lot_sell = sku.lot_size_sell or 1
+                actual_deduction = ps_detail.packed_qty * unit_sell * lot_sell
+                stock_qty = sku.stock_qty or 0
+                if stock_qty - actual_deduction < 0:
+                    product_name = sku.skuid
+                    vp = db.session.query(VendorProduct).filter_by(vpid=sku.vpid).first()
+                    if vp:
+                        product = db.session.query(Product).filter_by(pid=vp.pid).first()
+                        if product:
+                            product_name = product.pname
+                    return {"message": f"Stock is not sufficient for {product_name}: {sku.skuid}"}, 400
+        
         # 1. Create Invoice
         cinv_id = f"INV-{uuid.uuid4().hex[:6].upper()}"
         invoice = CustomerInvoice(
@@ -531,6 +548,13 @@ class InternalShipResource(Resource):
             )
             db.session.add(inv_detail)
             total_inv_amount += (ps_detail.packed_qty * sale_price)
+            
+            # Deduct stock quantity based on packed_qty, lot_size_sell, and unit_measurement_sell
+            if sku:
+                unit_sell = sku.unit_measurement_sell or 1
+                lot_sell = sku.lot_size_sell or 1
+                actual_deduction = ps_detail.packed_qty * unit_sell * lot_sell
+                sku.stock_qty = (sku.stock_qty or 0) - actual_deduction
             
         invoice.total_amount = total_inv_amount
         

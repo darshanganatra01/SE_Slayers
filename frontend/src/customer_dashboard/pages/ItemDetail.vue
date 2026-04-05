@@ -19,9 +19,6 @@
           <h1 class="text-2xl font-bold text-foreground">{{ itemData.product.pName }}</h1>
           <p class="text-sm text-muted-foreground">Order #{{ itemData.coId }} · Item #{{ itemData.codId }}</p>
         </div>
-        <Badge :variant="itemData.timeline[1].completed ? 'default' : 'secondary'">
-          {{ itemData.timeline[1].completed ? 'Shipped' : 'Confirmed' }}
-        </Badge>
       </div>
 
       <div class="grid gap-6 md:grid-cols-3">

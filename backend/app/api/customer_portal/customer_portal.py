@@ -491,11 +491,20 @@ class CustomerItemDetail(Resource):
             .filter(PackingSlip.coid == order.coid, CustomerInvDetail.skuid == detail.skuid)\
             .order_by(CustomerInvoice.invoice_date.asc()).all()
             
-        shipped_date = None
-        total_shipped_qty = 0
-        if inv_details:
-            shipped_date = inv_details[0].customer_invoice.invoice_date.isoformat()
-            total_shipped_qty = sum(d.delivered_qty or 0 for d in inv_details)
+        timeline = [
+            {"status": "Confirmed", "date": order.order_date.isoformat() if order.order_date else "", "completed": True, "qty": detail.quantity or 0}
+        ]
+        
+        has_shipped = False
+        for inv_det in inv_details:
+            qty = inv_det.delivered_qty or 0
+            if qty > 0:
+                has_shipped = True
+                date_str = inv_det.customer_invoice.invoice_date.isoformat() if inv_det.customer_invoice and inv_det.customer_invoice.invoice_date else ""
+                timeline.append({"status": "Shipped", "date": date_str, "completed": True, "qty": qty})
+                
+        if not has_shipped:
+            timeline.append({"status": "Shipped", "date": "", "completed": False, "qty": 0})
 
         # Get received info
         from app.models.delivery_receipt import DeliveryReceipt, DeliveryReceiptDetail
@@ -503,17 +512,16 @@ class CustomerItemDetail(Resource):
             .filter(PackingSlip.coid == order.coid, DeliveryReceiptDetail.skuid == detail.skuid)\
             .order_by(DeliveryReceipt.received_date.asc()).all()
             
-        received_date = None
-        total_received_qty = 0
-        if received_details:
-            received_date = received_details[0].delivery_receipt.received_date.isoformat()
-            total_received_qty = sum(d.received_qty or 0 for d in received_details)
-            
-        timeline = [
-            {"status": "Confirmed", "date": order.order_date.isoformat() if order.order_date else "", "completed": True, "qty": detail.quantity or 0},
-            {"status": "Shipped", "date": shipped_date or "", "completed": shipped_date is not None, "qty": total_shipped_qty},
-            {"status": "Received", "date": received_date or "", "completed": received_date is not None, "qty": total_received_qty}
-        ]
+        has_received = False
+        for rec_det in received_details:
+            qty = rec_det.received_qty or 0
+            if qty > 0:
+                has_received = True
+                date_str = rec_det.delivery_receipt.received_date.isoformat() if rec_det.delivery_receipt and rec_det.delivery_receipt.received_date else ""
+                timeline.append({"status": "Received", "date": date_str, "completed": True, "qty": qty})
+                
+        if not has_received:
+            timeline.append({"status": "Received", "date": "", "completed": False, "qty": 0})
         
         # Format specs
         specs_str = ""
