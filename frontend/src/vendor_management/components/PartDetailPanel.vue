@@ -10,9 +10,9 @@
     <template v-else>
       <div class="pd-header">
         <div class="pd-title">{{ part.name }}</div>
-        <div class="pd-sub" v-if="!selectedSize">Select a size to view vendor options</div>
+        <div class="pd-sub" v-if="!selectedSizeObj">Select a specification to view vendor options</div>
         <div class="pd-sub" v-else>
-          <span class="pd-sub-size">{{ selectedSize }}</span>
+          <span class="pd-sub-size">{{ selectedSpecDisplay }}</span>
           · select a vendor below to proceed
         </div>
       </div>
@@ -28,16 +28,19 @@
           </div>
 
           <div class="pd-sizes-section">
-            <div class="pd-sizes-label">Available Sizes</div>
+            <div class="pd-sizes-label">Available Specifications</div>
             <div class="pd-sizes-grid">
               <button
                 v-for="sizeObj in part.sizes"
-                :key="sizeObj.size"
+                :key="sizeObj.key || sizeObj.size"
                 class="pd-size-btn"
-                :class="{ active: selectedSize === sizeObj.size }"
+                :class="{ active: selectedSizeKey === (sizeObj.key || sizeObj.size) }"
                 @click="selectSize(sizeObj)"
               >
-                <span class="pd-size-label">{{ sizeObj.size }}</span>
+                <span class="pd-size-copy">
+                  <span class="pd-size-label">{{ sizeObj.size }}</span>
+                  <span v-if="sizeObj.spec" class="pd-size-spec">{{ sizeObj.spec }}</span>
+                </span>
                 <span class="pd-size-vendors">
                   <svg width="9" height="9" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                     <rect x="2" y="4" width="10" height="8" rx="1"/><path d="M5 4V3a2 2 0 014 0v1"/>
@@ -49,15 +52,15 @@
           </div>
         </div>
 
-        <div class="pd-right" :class="{ visible: !!selectedSize }">
-          <div v-if="!selectedSize" class="pd-vendor-empty">
+        <div class="pd-right" :class="{ visible: !!selectedSizeObj }">
+          <div v-if="!selectedSizeObj" class="pd-vendor-empty">
             <div class="pve-icon">🏪</div>
-            <div class="pve-text">Select a size to compare vendors</div>
+            <div class="pve-text">Select a specification to compare vendors</div>
           </div>
 
           <template v-else>
             <div class="pd-vendors-label">
-              Vendors for <strong>{{ selectedSize }}</strong>
+              Vendors for <strong>{{ selectedSpecDisplay }}</strong>
             </div>
 
             <div class="pd-vendor-cards">
@@ -77,7 +80,7 @@
                 </div>
                 <div class="pv-details">
                   <div class="pv-detail">
-                    <span class="pvd-label">Price</span>
+                    <span class="pvd-label">Current Buy</span>
                     <span class="pvd-value">{{ priceLabel(v.price) }}</span>
                   </div>
                   <div class="pv-detail">
@@ -118,24 +121,36 @@
 export default {
   name: 'PartDetailPanel',
   props: {
-    part: { type: Object, default: null }
+    part: { type: Object, default: null },
+    preselectedSizeKey: { type: String, default: null }
   },
   emits: ['select-vendor'],
   data() {
     return {
-      selectedSize:     null,
+      selectedSizeKey:  null,
       selectedSizeObj:  null,
       selectedVendorId: null
     }
   },
   watch: {
     part() {
-      this.selectedSize     = null
+      this.selectedSizeKey  = null
       this.selectedSizeObj  = null
       this.selectedVendorId = null
+      this.applyPreselectedSize()
+    },
+    preselectedSizeKey() {
+      this.applyPreselectedSize()
     }
   },
   computed: {
+    selectedSpecDisplay() {
+      if (!this.selectedSizeObj) return ''
+      if (this.selectedSizeObj.spec) {
+        return `${this.selectedSizeObj.size} · ${this.selectedSizeObj.spec}`
+      }
+      return this.selectedSizeObj.size
+    },
     currentVendors() {
       if (!this.selectedSizeObj) return []
       return this.selectedSizeObj.suppliers
@@ -147,8 +162,20 @@ export default {
     }
   },
   methods: {
+    applyPreselectedSize() {
+      if (!this.part || !this.preselectedSizeKey) return
+
+      const matchingSize = this.part.sizes.find(
+        (sizeObj) => (sizeObj.key || sizeObj.size) === this.preselectedSizeKey
+      )
+      if (!matchingSize) return
+
+      this.selectedSizeKey = matchingSize.key || matchingSize.size
+      this.selectedSizeObj = matchingSize
+      this.selectedVendorId = null
+    },
     selectSize(sizeObj) {
-      this.selectedSize     = sizeObj.size
+      this.selectedSizeKey  = sizeObj.key || sizeObj.size
       this.selectedSizeObj  = sizeObj
       this.selectedVendorId = null
     },
@@ -169,11 +196,16 @@ export default {
     confirmVendor() {
       const v = this.currentVendors.find(v => v.vendorId === this.selectedVendorId)
       this.$emit('select-vendor', {
-        part:       this.part,
-        size:       this.selectedSize,
-        vendorId:   this.selectedVendorId,
+        partId: this.part?.id || '',
+        partName: this.part?.name || '',
+        specification: this.selectedSpecDisplay,
+        vendorId: this.selectedVendorId,
         vendorName: v?.vendor?.name || this.selectedVendorId,
-        price:      v?.price
+        skuId: v?.skuId || '',
+        currentBuy: v?.currentBuy ?? v?.price ?? null,
+        unitMeasurementBuy: v?.unitMeasurementBuy ?? null,
+        lotSize: v?.lotSize ?? null,
+        leadTime: v?.leadTime ?? null
       })
     }
   }
@@ -291,7 +323,19 @@ export default {
 }
 .pd-size-btn:hover { border-color: var(--blue); background: var(--blue-dim); }
 .pd-size-btn.active { border-color: var(--blue); background: var(--blue-dim); }
+.pd-size-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
 .pd-size-label { font-size: 12.5px; font-weight: 500; color: var(--ink); font-family: 'Geist Mono', monospace; }
+.pd-size-spec {
+  font-size: 10.5px;
+  color: var(--ink-4);
+  line-height: 1.3;
+}
 .pd-size-vendors { display: flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--ink-4); }
 .pd-size-btn:hover .pd-size-vendors,
 .pd-size-btn.active .pd-size-vendors { color: var(--blue); }

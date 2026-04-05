@@ -3,23 +3,31 @@
     <div class="panel-head">
       <div>
         <div class="panel-title">Pending stock arrivals</div>
-        <div class="panel-sub">Ordered · not yet received</div>
+        <div class="panel-sub">Pending and received procurement requests</div>
       </div>
-      <span class="panel-link">View all orders →</span>
+      <button
+        class="panel-link"
+        type="button"
+        @click="$emit('go-vendor', { source: 'procurement-history' })"
+      >
+        View all procurement requests →
+      </button>
     </div>
-    <div v-if="!orders.length" class="empty-state">No pending stock arrivals yet.</div>
+    <div v-if="!orders.length" class="empty-state">No procurement requests yet.</div>
     <div
       v-for="(o, i) in orders"
       :key="i"
       class="por"
-      @click="$emit('go-vendor', o.sku, o.size)"
+      :class="{ received: o.status === 'received' }"
+      @click="$emit('go-vendor', { source: 'procurement-history', procurementId: o.procurementId })"
     >
       <div class="por-left">
         <div class="por-name">{{ o.name }}</div>
         <div class="por-detail">{{ o.detail }}</div>
       </div>
       <div class="por-right">
-        <div class="por-qty">× {{ o.qty }} units</div>
+        <div class="por-status" :class="statusClass(o.status)">{{ statusLabel(o.status) }}</div>
+        <div class="por-qty">× {{ o.qty }} parts</div>
       </div>
     </div>
   </div>
@@ -31,7 +39,15 @@ export default {
   props: {
     orders: { type: Array, default: () => [] }
   },
-  emits: ['go-vendor']
+  emits: ['go-vendor'],
+  methods: {
+    statusClass(status) {
+      return status === 'received' ? 'por-status-received' : 'por-status-pending'
+    },
+    statusLabel(status) {
+      return status === 'received' ? 'Received' : 'Pending'
+    }
+  }
 }
 </script>
 
@@ -51,8 +67,12 @@ export default {
 .panel-title { font-size: 13px; font-weight: 600; }
 .panel-sub   { font-size: 11.5px; color: var(--ink-4); margin-top: 2px; }
 .panel-link  {
+  background: none;
+  border: none;
   font-size: 12px; font-weight: 500;
   color: var(--blue); cursor: pointer;
+  padding: 0;
+  font-family: 'Geist', sans-serif;
 }
 .empty-state {
   padding: 24px 16px;
@@ -78,6 +98,20 @@ export default {
 .por-right {
   display: flex; flex-direction: column;
   align-items: flex-end; gap: 4px;
+}
+.por-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.por-status-pending {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+.por-status-received {
+  background: var(--green-dim);
+  color: var(--green);
 }
 .por-qty { font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
 </style>
