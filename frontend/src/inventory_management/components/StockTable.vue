@@ -22,7 +22,7 @@
           v-for="p in filteredParts"
           :key="p.id"
           class="cr"
-          @click="$emit('go-vendor', p.sku, p.size)"
+          @click="$emit('go-vendor', vendorTarget(p))"
         >
           <td>
             <div class="pn">{{ p.name }}</div>
@@ -79,6 +79,18 @@ export default {
     }
   },
   methods: {
+    vendorTarget(p) {
+      return {
+        source: 'inventory-stock',
+        partId: p.pid || '',
+        specKey: this.specKey(p),
+        specLabel: this.sizeDisplay(p)
+      }
+    },
+    specKey(p) {
+      if (p.spec) return `${p.size}\n${p.spec}`
+      return p.size
+    },
     sizeDisplay(p) {
       if (p.dims) return `${p.size} · ${p.dims}`
       return p.size
@@ -118,15 +130,23 @@ export default {
 
 <style scoped>
 .tbl-wrap {
+  --table-head-height: 42px;
+  --table-row-height: 58px;
+  --table-visible-rows: 10;
   background: var(--white);
   border: 1.5px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   flex-shrink: 0;
+  max-height: calc(var(--table-head-height) + (var(--table-row-height) * var(--table-visible-rows)));
 }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 thead tr { border-bottom: 1.5px solid var(--border); }
 th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   padding: 9px 12px; text-align: left;
   font-size: 11px; font-weight: 500; text-transform: uppercase;
   letter-spacing: .06em; color: var(--ink-4);
@@ -176,5 +196,14 @@ tr:last-child td { border-bottom: none; }
 .empty-row td {
   padding: 32px; text-align: center;
   color: var(--ink-4); font-size: 13px;
+}
+
+.tbl-wrap::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tbl-wrap::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 999px;
 }
 </style>

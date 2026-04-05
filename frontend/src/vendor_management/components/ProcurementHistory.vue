@@ -14,7 +14,19 @@
       </div>
 
       <!-- Empty state -->
-      <div v-if="procurements.length === 0" class="empty-state">
+      <div v-if="loading" class="empty-state">
+        <div class="es-icon">⌛</div>
+        <div class="es-text">Loading procurement requests</div>
+        <div class="es-sub">Fetching vendor orders from the database</div>
+      </div>
+
+      <div v-else-if="error" class="empty-state">
+        <div class="es-icon">!</div>
+        <div class="es-text">Unable to load procurement requests</div>
+        <div class="es-sub">{{ error }}</div>
+      </div>
+
+      <div v-else-if="procurements.length === 0" class="empty-state">
         <div class="es-icon">📋</div>
         <div class="es-text">No procurement requests</div>
         <div class="es-sub">Submit a procurement request from Part Search & Compare</div>
@@ -34,10 +46,10 @@
           <thead>
             <tr>
               <th>ID</th>
-              <th>Part / Size</th>
+              <th>Part / Specification</th>
               <th>Date</th>
               <th>Vendor</th>
-              <th>Qty</th>
+              <th>Lots / Qty</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -46,7 +58,7 @@
               v-for="req in procurements"
               :key="req.id"
               :req="req"
-              :vendor-name="vendorName(req.vendorId)"
+              :vendor-name="req.vendorName || vendorName(req.vendorId)"
               :selected="selectedId === req.id"
               @select="$emit('select', $event)"
             />
@@ -59,6 +71,7 @@
     <ProcurementDetailPanel
       :req="selectedReq"
       :vendor="selectedVendor"
+      :marking-received="selectedReq ? markingReceivedId === selectedReq.id : false"
       @close="$emit('select', null)"
       @mark-received="$emit('mark-received', $event)"
     />
@@ -76,7 +89,10 @@ export default {
   props: {
     procurements: { type: Array, default: () => [] },
     vendors:      { type: Array, default: () => [] },
-    selectedId:   { type: String, default: null }
+    selectedId:   { type: String, default: null },
+    markingReceivedId: { type: String, default: null },
+    loading:      { type: Boolean, default: false },
+    error:        { type: String, default: '' }
   },
   emits: ['select', 'mark-received'],
   computed: {
@@ -89,7 +105,13 @@ export default {
     },
     selectedVendor() {
       if (!this.selectedReq) return null
-      return this.vendors.find(v => v.id === this.selectedReq.vendorId) || null
+      return this.vendors.find(v => v.id === this.selectedReq.vendorId) || {
+        id: this.selectedReq.vendorId,
+        name: this.selectedReq.vendorName || this.selectedReq.vendorId,
+        location: '—',
+        leadTime: null,
+        contact: { phone: '—', email: '—' }
+      }
     }
   },
   methods: {
