@@ -14,7 +14,8 @@ export const routes = [
   { path: '/dashboard', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: OverviewDashboard },
   { path: '/orders', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: OrderManagement },
   { path: '/customers', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: CustomerDashboard },
-  { path: '/vendors', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: VendorManagement },
+  { path: '/vendors', name: 'vendors', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: VendorManagement },
+  { path: '/vendors/:vendorId', name: 'vendor-details', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: VendorManagement },
   { path: '/inventory', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: () => import('../inventory_management/inventory.vue') },
   {
     path: '/store',

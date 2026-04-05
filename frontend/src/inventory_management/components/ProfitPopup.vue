@@ -4,7 +4,7 @@
       <div class="pop-h">
         <div>
           <div class="pop-title">{{ data.title }}</div>
-          <div class="pop-sub">Stock levels by size · tap to view vendor procurement</div>
+          <div class="pop-sub">{{ data.category ? `${data.category} · ` : '' }}Stock levels by size</div>
         </div>
         <button class="pop-x" @click="$emit('close')">×</button>
       </div>
@@ -13,7 +13,7 @@
           v-for="(r, i) in data.rows"
           :key="i"
           class="pop-row"
-          @click="$emit('go-vendor', data.sku, r.size)"
+          @click="$emit('go-vendor', data.title, r.size)"
         >
           <div class="pop-size-col">
             <div class="pop-size">{{ r.size }}</div>
@@ -38,7 +38,7 @@
           <div class="pop-total-lbl">Total stock</div>
           <div class="pop-total-val">{{ totalStock }} units</div>
         </div>
-        <button class="btn-vendor" @click="$emit('go-vendor', data.sku, 'all'); $emit('close')">
+        <button class="btn-vendor" @click="$emit('go-vendor', data.title, 'all'); $emit('close')">
           <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
           View all vendors for this product
         </button>
@@ -54,7 +54,7 @@ export default {
     visible: { type: Boolean, default: false },
     data: {
       type: Object,
-      default: () => ({ title: '', sku: '', rows: [] })
+      default: () => ({ title: '', category: '', rows: [] })
     }
   },
   emits: ['close', 'go-vendor'],

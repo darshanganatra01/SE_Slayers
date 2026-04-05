@@ -9,41 +9,37 @@
         <div class="form-row">
           <div class="ff full">
             <label class="fl2">Part name</label>
-            <input class="fi2" type="text" v-model="form.name" placeholder="e.g. Hose Clip (Light)">
+            <input class="fi2" type="text" v-model="form.name" placeholder="Enter part name">
           </div>
         </div>
         <div class="form-row">
           <div class="ff">
             <label class="fl2">SKU / Part code</label>
-            <input class="fi2" type="text" v-model="form.sku" placeholder="HC-27">
+            <input class="fi2" type="text" v-model="form.sku" placeholder="Enter SKU">
           </div>
           <div class="ff">
             <label class="fl2">Category</label>
-            <select class="fi2" v-model="form.category">
-              <option>Hose Fittings</option>
-              <option>Pipe Fittings</option>
-              <option>Brake System</option>
-              <option>Filtration</option>
-              <option>Engine</option>
-              <option>Electrical</option>
-            </select>
+            <input class="fi2" type="text" v-model="form.category" list="inventory-categories" placeholder="Enter category">
+            <datalist id="inventory-categories">
+              <option v-for="category in categories" :key="category" :value="category"></option>
+            </datalist>
           </div>
         </div>
         <div class="form-divider">Size &amp; Dimensions</div>
         <div class="form-row">
           <div class="ff">
             <label class="fl2">Size (inches)</label>
-            <input class="fi2" type="text" v-model="form.size" placeholder='e.g. 1.5"'>
+            <input class="fi2" type="text" v-model="form.size" placeholder="Enter size">
           </div>
           <div class="ff">
             <label class="fl2">Diameter / Range</label>
-            <input class="fi2" type="text" v-model="form.dims" placeholder="e.g. 58–62 mm">
+            <input class="fi2" type="text" v-model="form.dims" placeholder="Enter dimensions">
           </div>
         </div>
         <div class="form-row">
           <div class="ff full">
             <label class="fl2">Additional spec</label>
-            <input class="fi2" type="text" v-model="form.spec" placeholder="e.g. Bolt: 12×45 mm">
+            <input class="fi2" type="text" v-model="form.spec" placeholder="Enter specification details">
             <span class="form-hint">Bolt size, thread pitch, pressure rating etc.</span>
           </div>
         </div>
@@ -90,7 +86,8 @@
 export default {
   name: 'AddPartModal',
   props: {
-    visible: { type: Boolean, default: false }
+    visible: { type: Boolean, default: false },
+    categories: { type: Array, default: () => [] }
   },
   emits: ['close', 'submit'],
   data() {
@@ -106,7 +103,7 @@ export default {
   methods: {
     emptyForm() {
       return {
-        name: '', sku: '', category: 'Hose Fittings',
+        name: '', sku: '', category: '',
         size: '', dims: '', spec: '',
         openingStock: '', threshold: '', unit: 'per piece',
         buyPrice: '', sellPrice: ''

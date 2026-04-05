@@ -9,6 +9,7 @@ class Vendor(db.Model):
     vid           = db.Column(db.String, primary_key=True)
     vendor_name   = db.Column(db.String, nullable=False)
     vendor_prefix = db.Column(db.String)   # Vendor-specific prefix
+    lead_time     = db.Column(db.Integer)
     location      = db.Column(db.String)
     contact       = db.Column(db.String)
     email         = db.Column(db.String)

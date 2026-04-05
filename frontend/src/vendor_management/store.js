@@ -1,7 +1,56 @@
 import { defineStore } from 'pinia'
+import { useAuthStore } from '../stores/auth'
+
+const normalizeVendor = (vendor = {}) => {
+  const products = Array.isArray(vendor.products) ? vendor.products : []
+  const parts = Array.isArray(vendor.parts)
+    ? vendor.parts
+    : products.map((product) => product.name).filter(Boolean)
+
+  return {
+    id: String(vendor.id ?? ''),
+    name: vendor.name || 'Unknown Vendor',
+    prefix: vendor.prefix || '',
+    leadTime: Number.isFinite(Number(vendor.leadTime)) ? Number(vendor.leadTime) : null,
+    location: vendor.location || '—',
+    contact: {
+      phone: vendor.contact?.phone || '—',
+      email: vendor.contact?.email || '—'
+    },
+    parts,
+    products,
+    partCount: Number(vendor.partCount ?? parts.length ?? 0)
+  }
+}
+
+const upsertVendor = (vendors, nextVendor) => {
+  const nextId = String(nextVendor.id)
+  const existingIndex = vendors.findIndex((vendor) => String(vendor.id) === nextId)
+
+  if (existingIndex === -1) {
+    return [...vendors, nextVendor]
+  }
+
+  const nextVendors = [...vendors]
+  nextVendors.splice(existingIndex, 1, {
+    ...vendors[existingIndex],
+    ...nextVendor
+  })
+  return nextVendors
+}
 
 export const useVendorStore = defineStore('vendors', {
   state: () => ({
+    directoryVendors: [],
+    directoryLoading: false,
+    directoryError: '',
+    compareParts: [],
+    compareLoading: false,
+    compareError: '',
+    selectedDirectoryVendor: null,
+    vendorDetailLoading: false,
+    vendorDetailError: '',
+
     vendors: [
       {
         id: 'VND-001',
@@ -274,10 +323,13 @@ export const useVendorStore = defineStore('vendors', {
   }),
 
   getters: {
-    activeVendorCount: (state) => state.vendors.length,
+    activeVendorCount: (state) => state.directoryVendors.length,
 
     findVendorById: (state) => (id) =>
       state.vendors.find(v => v.id === id),
+
+    findDirectoryVendorById: (state) => (id) =>
+      state.directoryVendors.find(v => v.id === String(id)),
 
     vendorsBySize: (state) => (partId, sizeLabel) => {
       const part = state.parts.find(p => p.id === partId)
@@ -303,6 +355,74 @@ export const useVendorStore = defineStore('vendors', {
   },
 
   actions: {
+    async fetchVendorDirectory() {
+      this.directoryLoading = true
+      this.directoryError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest('/api/vendors')
+        this.directoryVendors = (payload.vendors || []).map(normalizeVendor)
+      } catch (error) {
+        this.directoryVendors = []
+        this.directoryError = error.message || 'Unable to load vendors right now.'
+      } finally {
+        this.directoryLoading = false
+      }
+    },
+
+    async fetchCompareCatalog() {
+      this.compareLoading = true
+      this.compareError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest('/api/vendors/catalog/compare')
+        this.compareParts = payload.parts || []
+      } catch (error) {
+        this.compareParts = []
+        this.compareError = error.message || 'Unable to load the parts catalog right now.'
+      } finally {
+        this.compareLoading = false
+      }
+    },
+
+    async fetchVendorDetails(vendorId) {
+      if (!vendorId) {
+        this.clearVendorDetails()
+        return null
+      }
+
+      const existingVendor = this.findDirectoryVendorById(vendorId)
+      if (existingVendor) {
+        this.selectedDirectoryVendor = existingVendor
+      }
+
+      this.vendorDetailLoading = true
+      this.vendorDetailError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest(`/api/vendors/${encodeURIComponent(vendorId)}`)
+        const vendor = normalizeVendor(payload.vendor || {})
+        this.selectedDirectoryVendor = vendor
+        this.directoryVendors = upsertVendor(this.directoryVendors, vendor)
+        return vendor
+      } catch (error) {
+        this.selectedDirectoryVendor = null
+        this.vendorDetailError = error.message || 'Unable to load vendor details right now.'
+        return null
+      } finally {
+        this.vendorDetailLoading = false
+      }
+    },
+
+    clearVendorDetails() {
+      this.selectedDirectoryVendor = null
+      this.vendorDetailLoading = false
+      this.vendorDetailError = ''
+    },
+
     addProcurement(formData, vendorId) {
       const newId = 'PRQ-' + String(this.procurements.length + 1).padStart(3, '0')
       const now = new Date()

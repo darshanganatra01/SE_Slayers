@@ -17,6 +17,7 @@ from app.api.auth import auth_ns       # noqa: E402
 from app.api.health import health_ns   # noqa: E402
 from app.api.customer_portal.customer_portal import customer_ns
 from app.api.internal_portal.internal_portal import internal_ns
+from app.api.vendors import vendors_ns  # noqa: E402
 
 api.add_namespace(auth_ns)
 api.add_namespace(health_ns)
@@ -26,3 +27,4 @@ from app.api.inventory import inventory_ns  # noqa: E402
 
 
 api.add_namespace(inventory_ns)
+api.add_namespace(vendors_ns)
