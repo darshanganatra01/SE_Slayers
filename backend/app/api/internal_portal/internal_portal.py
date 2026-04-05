@@ -9,6 +9,7 @@ from app.models.vendor import VendorProduct
 from app.models.product import Product
 from app.models.packing_slip import PackingSlip, PackingSlipDetail
 from app.models.customer_invoice import CustomerInvoice, CustomerInvDetail
+from app.models.payment import Payment
 from flask import request
 import uuid
 from datetime import date
@@ -32,6 +33,179 @@ def map_cust_type(priority):
         return "Delayed"
     return "Regular"
 
+def map_acp_to_priority(acp_int):
+    """Map customer ACP category to order priority."""
+    if acp_int is None:
+        return "Medium"
+    if acp_int <= 15:
+        return "High"
+    elif acp_int <= 30:
+        return "Medium"
+    else:
+        return "Low"
+
+from datetime import timedelta
+
+@internal_ns.route("/overview")
+class InternalOverviewResource(Resource):
+    def get(self):
+        # 1. Pending orders (not Completed)
+        # Status map: Draft, Confirmed, Packed, PartiallyPacked, FullyPacked, PartiallyFulfilled -> Pending
+        all_orders = db.session.query(CustomerOrder).all()
+        pending_orders = 0
+        high_priority = 0
+        
+        for o in all_orders:
+            if o.status not in ["Completed", "Cancelled", "Dispatched"]:
+                pending_orders += 1
+                acp = o.customer.acp if o.customer and o.customer.acp else 30
+                if o.priority == "High" or acp <= 15:
+                    high_priority += 1
+
+        # 3. Low stock items
+        all_skus = db.session.query(SA_SKU).all()
+        low_stock_skus = []
+        for s in all_skus:
+            thr = s.threshold if s.threshold is not None else 10
+            qty = s.stock_qty if s.stock_qty is not None else 0
+            if qty < thr:
+                low_stock_skus.append(s)
+        
+        low_stock_count = len(low_stock_skus)
+
+        # 4. Quarterly revenue
+        three_months_ago = date.today() - timedelta(days=90)
+        payments = db.session.query(Payment).filter(Payment.payment_date >= three_months_ago).all()
+        quarterly_revenue = sum(float(p.amount) for p in payments)
+
+        # 5. Overdue alert
+        invoices = db.session.query(CustomerInvoice).all()
+        overdue_amt = 0.0
+        overdue_customers = set()
+        longest_outstanding = 0
+        today = date.today()
+
+        for inv in invoices:
+            total_amt = float(inv.total_amount or 0)
+            paid_amt = sum(float(p.amount) for p in inv.payments.all())
+            if paid_amt < total_amt and total_amt > 0:
+                # Find ACP
+                order = None
+                if inv.packing_slip:
+                    order = inv.packing_slip.customer_order
+                
+                acp = order.customer.acp if order and order.customer and order.customer.acp else 30
+                
+                days_outstanding = (today - inv.invoice_date).days
+                if days_outstanding > acp:
+                    overdue_amt += (total_amt - paid_amt)
+                    if order and order.customer:
+                        overdue_customers.add(order.customer.cid)
+                    if days_outstanding > longest_outstanding:
+                        longest_outstanding = days_outstanding
+
+        # 6. Priority orders (top 5 pending by ACP)
+        pending_orders_list = [o for o in all_orders if o.status not in ["Completed", "Cancelled"]]
+        pending_orders_list.sort(key=lambda x: (x.customer.acp if x.customer and x.customer.acp else 30, x.order_date))
+        
+        priority_orders_dto = []
+        for o in pending_orders_list[:5]:
+            cname = o.customer.customer_name if o.customer else "Unknown"
+            val = float(o.total_amount or 0)
+            score = o.customer.acp if o.customer and o.customer.acp else 30
+            priority_orders_dto.append({
+                "id": o.coid,
+                "name": cname,
+                "placedOn": o.order_date.strftime("%B %d %Y") if o.order_date else "",
+                "val": f"₹{val:,.0f}",
+                "score": score
+            })
+
+        # 7. Low Stock List (top 5)
+        low_stock_dto = []
+        for s in low_stock_skus[:5]:
+            pname = s.skuid
+            # resolve pname via VendorProduct -> Product
+            vp = db.session.query(VendorProduct).filter_by(vpid=s.vpid).first()
+            if vp:
+                p = db.session.query(Product).filter_by(pid=vp.pid).first()
+                if p:
+                    pname = p.pname
+            
+            low_stock_dto.append({
+                "name": pname,
+                "qty": s.stock_qty or 0,
+                "max": s.threshold or 10
+            })
+
+        # 8. Activity Feed
+        recent_orders = db.session.query(CustomerOrder).order_by(CustomerOrder.order_date.desc()).limit(3).all()
+        recent_payments = db.session.query(Payment).order_by(Payment.payment_date.desc()).limit(3).all()
+        recent_invoices = db.session.query(CustomerInvoice).order_by(CustomerInvoice.invoice_date.desc()).limit(3).all()
+
+        activities = []
+        for o in recent_orders:
+            activities.append({
+                "date": o.order_date,
+                "color": "#2563eb",
+                "title": "Order placed",
+                "desc": f"{o.coid} · {o.customer.customer_name if o.customer else ''}",
+                "amt": f"₹{o.total_amount or 0:,.0f}",
+                "amtColor": "#09090b"
+            })
+        for p in recent_payments:
+            inv_str = f"INV-{p.cinv_id.split('-')[-1]}" if p.cinv_id else "Payment"
+            activities.append({
+                "date": p.payment_date,
+                "color": "#16a34a",
+                "title": "Payment in",
+                "desc": f"{inv_str} · {p.customer_invoice.packing_slip.customer_order.customer.customer_name if p.customer_invoice and p.customer_invoice.packing_slip and p.customer_invoice.packing_slip.customer_order else ''}",
+                "amt": f"₹{p.amount:,.0f}",
+                "amtColor": "#16a34a"
+            })
+        for i in recent_invoices:
+            order = i.packing_slip.customer_order if i.packing_slip else None
+            acp = order.customer.acp if order and order.customer and order.customer.acp else 30
+            days_out = (today - i.invoice_date).days
+            title = "Invoice raised"
+            color = "#d97706"
+            if days_out > acp:
+                title = "Invoice overdue"
+                color = "#dc2626"
+            
+            cname = order.customer.customer_name if order and order.customer else ""
+            activities.append({
+                "date": i.invoice_date,
+                "color": color,
+                "title": title,
+                "desc": f"{i.cinv_id} · {cname}",
+                "amt": f"₹{i.total_amount or 0:,.0f}",
+                "amtColor": color if title == "Invoice overdue" else "#09090b"
+            })
+
+        activities.sort(key=lambda x: x["date"], reverse=True)
+        time_labels = ["2m", "18m", "1h", "2h", "3h", "4h", "5h", "6h", "1d"]
+        for idx, a in enumerate(activities):
+            a["time"] = time_labels[idx] if idx < len(time_labels) else "1d"
+            del a["date"]
+
+        return {
+            "metrics": {
+                "pending": pending_orders,
+                "highPriority": high_priority,
+                "lowStock": low_stock_count,
+                "quarterlyRevenue": quarterly_revenue
+            },
+            "overdue": {
+                "amount": float(overdue_amt),
+                "customers": len(overdue_customers),
+                "longestOutstanding": longest_outstanding
+            },
+            "priorityOrders": priority_orders_dto,
+            "activityFeed": activities[:6],
+            "lowStockItems": low_stock_dto
+        }, 200
+
 @internal_ns.route("/orders")
 class InternalOrdersResource(Resource):
     def get(self):
@@ -48,7 +222,9 @@ class InternalOrdersResource(Resource):
             customer = order.customer
             customer_name = customer.customer_name if customer else "Unknown"
             shop_name = customer.company_name if hasattr(customer, "company_name") else customer_name
-            cust_type = map_cust_type(order.priority)
+            acp_val = customer.acp if customer and customer.acp is not None else 30
+            priority = map_acp_to_priority(acp_val)
+            cust_type = map_cust_type(priority)
             date_str = order.order_date.strftime("%B %d %Y") if order.order_date else ""
 
             # Fetch all details and calculate distribution
@@ -118,7 +294,7 @@ class InternalOrdersResource(Resource):
             if ip_items:
                 orders_data.append({
                     "id": order.coid, "status": "inprocess", "order": status_bucket_counts["inprocess"],
-                    "customer": customer_name, "custType": cust_type, "priority": order.priority or "Medium",
+                    "customer": customer_name, "custType": cust_type, "priority": priority,
                     "value": f"₹{ip_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": ip_items
                 })
                 status_bucket_counts["inprocess"] += 1
@@ -139,7 +315,7 @@ class InternalOrdersResource(Resource):
                 packing_slips_ids = [s.pslip_id for s in order.packing_slips if s.status == "Packed"]
                 orders_data.append({
                     "id": f"{order.coid}-P", "status": "packed", "order": status_bucket_counts["packed"],
-                    "customer": customer_name, "custType": cust_type, "priority": order.priority or "Medium",
+                    "customer": customer_name, "custType": cust_type, "priority": priority,
                     "value": f"₹{p_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": p_items,
                     "pslip_ids": packing_slips_ids
                 })
@@ -175,7 +351,7 @@ class InternalOrdersResource(Resource):
             if s_items:
                 orders_data.append({
                     "id": f"{order.coid}-S", "status": "shipped", "order": status_bucket_counts["shipped"],
-                    "customer": customer_name, "custType": cust_type, "priority": order.priority or "Medium",
+                    "customer": customer_name, "custType": cust_type, "priority": priority,
                     "value": f"₹{s_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": s_items,
                     "cinv_ids": cinv_ids,
                     "is_received": all_received
@@ -431,3 +607,309 @@ class InternalMarkReceivedResource(Resource):
                 
         db.session.commit()
         return {"message": "Receipt confirmed successfully by Admin", "receipt_id": receipt_id}, 201
+
+def map_cust_type_to_acp(acp_int):
+    if acp_int == 1: return "Platinum"
+    if acp_int == 2: return "Gold"
+    if acp_int == 3: return "Silver"
+    return "Platinum"
+
+@internal_ns.route("/customers")
+class InternalCustomersResource(Resource):
+    def get(self):
+        customers = Customer.query.all()
+        result = []
+        
+        for c in customers:
+            total_orders = 0
+            total_value = 0.0
+            pending = 0.0
+            avg_pay_days = 0 
+            
+            c_data = {
+                "id": c.cid,
+                "name": c.customer_name,
+                "biz": c.customer_name,
+                "phone": c.contact or "",
+                "email": c.email or "",
+                "loc": c.location or "",
+                "type": map_cust_type_to_acp(c.acp),
+                "acp": c.acp if c.acp is not None else 30,
+                "credit": 100000,
+                "pending": 0,
+                "totalOrders": 0,
+                "totalValue": 0,
+                "avgPayDays": 0,
+                "invoices": [],
+                "orders": [],
+                "payHistory": []
+            }
+            
+            orders = CustomerOrder.query.filter_by(cid=c.cid).all()
+            total_orders = len(orders)
+            
+            invoices = []
+            # Collect all invoices per order for payment status lookup
+            order_invoices_map = {}  # coid -> [CustomerInvoice]
+            for o in orders:
+                val = 0.0
+                for d in o.details:
+                    val += float(d.amount or 0)
+                total_value += val
+                
+                # Collect invoices for this order
+                order_invs = []
+                for slip in o.packing_slips:
+                    for inv in slip.invoices.all():
+                        inv._assoc_order = o.coid
+                        invoices.append(inv)
+                        order_invs.append(inv)
+                order_invoices_map[o.coid] = order_invs
+                
+                # Derive paid status from actual invoice payments
+                status_mapped = "Pending"
+                if order_invs:
+                    all_paid = True
+                    for inv in order_invs:
+                        inv_total = float(inv.total_amount or 0)
+                        paid_amt = sum(float(p.amount) for p in inv.payments.all())
+                        if inv_total <= 0 or paid_amt < inv_total:
+                            all_paid = False
+                            break
+                    if all_paid:
+                        status_mapped = "Paid"
+                elif o.status == "Completed":
+                    status_mapped = "Paid"
+                
+                c_data["orders"].append({
+                    "id": o.coid,
+                    "date": o.order_date.strftime("%b %d") if o.order_date else "",
+                    "value": round(val, 2),
+                    "status": o.status or "In-Process",
+                    "paid": status_mapped
+                })
+            
+            for inv in invoices:
+                inv_total = float(inv.total_amount or 0)
+                paid_amount = sum(float(p.amount) for p in inv.payments.all())
+                
+                status = "paid" if (paid_amount >= inv_total and inv_total > 0) else "pending"
+                if getattr(inv, "status", "") == "Overdue":
+                    status = "overdue"
+                    
+                if status != "paid":
+                    pending += (inv_total - paid_amount)
+                
+                c_data["invoices"].append({
+                    "id": inv.cinv_id,
+                    "desc": f"Order {getattr(inv, '_assoc_order', '')}",
+                    "amount": round(inv_total, 2),
+                    "due": "",
+                    "status": status
+                })
+                
+                for p in inv.payments:
+                    c_data["payHistory"].append({
+                        "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
+                        "type": "payment",
+                        "amount": float(p.amount),
+                        "note": p.notes or f"Paid for {inv.cinv_id}"
+                    })
+
+            c_data["pending"] = round(pending, 2)
+            c_data["totalOrders"] = total_orders
+            c_data["totalValue"] = round(total_value, 2)
+            c_data["avgPayDays"] = avg_pay_days
+            
+            result.append(c_data)
+            
+        return result, 200
+
+@internal_ns.route("/collect-payment")
+class CollectPaymentResource(Resource):
+    def post(self):
+        data = request.json
+        cid = data.get("cid")
+        amount = float(data.get("amount", 0))
+        
+        if not cid or amount <= 0:
+            return {"message": "Valid Customer ID and amount are required."}, 400
+            
+        customer = Customer.query.get(cid)
+        if not customer:
+            return {"message": "Customer not found."}, 404
+            
+        orders = CustomerOrder.query.filter_by(cid=cid).all()
+        all_invoices = []
+        for o in orders:
+            for slip in o.packing_slips:
+                all_invoices.extend(slip.invoices.all())
+                
+        # Calculate unpaid amounts
+        unpaid_invs = []
+        for inv in all_invoices:
+            inv_total = float(inv.total_amount or 0)
+            paid_amt = sum(float(p.amount) for p in inv.payments.all())
+            if paid_amt < inv_total:
+                unpaid_invs.append({
+                    "inv": inv,
+                    "unpaid": inv_total - paid_amt,
+                    "date": inv.invoice_date
+                })
+                
+        # Sort FIFO (oldest first)
+        unpaid_invs.sort(key=lambda x: x["date"])
+        
+        rem_amount = amount
+        payments_made = []
+        
+        from app.models.user import User
+        active_user = User.query.first()
+        uid = active_user.uid if active_user else "admin"
+
+        import uuid
+        from datetime import date
+        for ui in unpaid_invs:
+            if rem_amount <= 0:
+                break
+                
+            inv = ui["inv"]
+            unpaid = ui["unpaid"]
+            pay_amt = min(rem_amount, unpaid)
+            
+            pay_id = "PAY-" + uuid.uuid4().hex[:6].upper()
+            new_payment = Payment(
+                payment_id=pay_id,
+                cinv_id=inv.cinv_id,
+                recorded_by=uid,
+                payment_date=date.today(),
+                amount=pay_amt,
+                method="Auto-FIFO",
+                notes=f"FIFO Collection"
+            )
+            db.session.add(new_payment)
+            payments_made.append({"inv_id": inv.cinv_id, "amount": pay_amt})
+            rem_amount -= pay_amt
+            
+        db.session.commit()
+        return {
+            "message": "Payment collected successfully", 
+            "collected": amount - rem_amount, 
+            "allocations": payments_made
+        }, 200
+
+@internal_ns.route("/new-order-data")
+class NewOrderDataResource(Resource):
+    def get(self):
+        """Return all customers and products for the new order form."""
+        customers = Customer.query.all()
+        cust_list = []
+        for c in customers:
+            cust_list.append({
+                "cid": c.cid,
+                "customer_name": c.customer_name,
+                "location": c.location or "",
+                "acp": c.acp if c.acp is not None else 2,
+                "priority": map_acp_to_priority(c.acp)
+            })
+
+        products = Product.query.all()
+        prod_list = []
+        for p in products:
+            prod_list.append({
+                "pid": p.pid,
+                "pname": p.pname,
+                "category": p.category or ""
+            })
+
+        return {"customers": cust_list, "products": prod_list}, 200
+
+
+@internal_ns.route("/product-skus/<string:pid>")
+class ProductSKUsResource(Resource):
+    def get(self, pid):
+        """Return all SKU variants for a given product."""
+        import json as _json
+        skus = SA_SKU.query.join(VendorProduct).filter(VendorProduct.pid == pid).all()
+        sku_list = []
+        for s in skus:
+            specs_str = ""
+            if s.specs:
+                try:
+                    specs_dict = _json.loads(s.specs) if isinstance(s.specs, str) else s.specs
+                    specs_str = " ".join([str(v) for v in specs_dict.values()])
+                except Exception:
+                    specs_str = str(s.specs)
+
+            sku_list.append({
+                "skuid": s.skuid,
+                "specs": specs_str,
+                "sell_rate": float(s.current_sell_rate) if s.current_sell_rate else 0.0,
+                "stock_qty": s.stock_qty or 0
+            })
+        return sku_list, 200
+
+
+@internal_ns.route("/create-order")
+class CreateOrderResource(Resource):
+    def post(self):
+        """Create a new customer order with line items."""
+        try:
+            data = request.get_json()
+            cid = data.get("cid")
+            items = data.get("items", [])
+
+            if not cid or not items:
+                return {"message": "Customer and at least one item required"}, 400
+
+            customer = Customer.query.get(cid)
+            if not customer:
+                return {"message": "Customer not found"}, 404
+
+            priority = map_acp_to_priority(customer.acp)
+
+            order_id = "CO-" + uuid.uuid4().hex[:8].upper()
+            new_order = CustomerOrder(
+                coid=order_id,
+                cid=cid,
+                created_by=customer.uid,
+                order_date=date.today(),
+                status="Confirmed",
+                priority=priority,
+                total_amount=0.0
+            )
+            db.session.add(new_order)
+
+            total_amount = 0.0
+            for item in items:
+                sku_id = item.get("skuid")
+                qty = int(item.get("quantity", 0))
+                if qty <= 0:
+                    continue
+
+                sku = SA_SKU.query.get(sku_id)
+                if not sku:
+                    continue
+
+                sell_rate = float(sku.current_sell_rate) if sku.current_sell_rate else 0.0
+                amount = qty * sell_rate
+                total_amount += amount
+
+                detail_id = "COD-" + uuid.uuid4().hex[:8].upper()
+                detail = CustomerOrderDetail(
+                    codid=detail_id,
+                    coid=order_id,
+                    skuid=sku_id,
+                    quantity=qty,
+                    amount=amount
+                )
+                db.session.add(detail)
+
+            new_order.total_amount = total_amount
+            db.session.commit()
+
+            return {"message": "Order created", "order_id": order_id, "total": round(total_amount, 2)}, 201
+
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error: {str(e)}"}, 500

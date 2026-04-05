@@ -41,36 +41,33 @@
 
     <!-- Board -->
     <div class="board">
-      <div class="cards-panel">
-
-        <!-- Column header -->
-        <div class="col-header">
-          <div class="col-header-dot" :style="{ background: SC[activeStatus] }"></div>
-          <div class="col-header-label">{{ SL[activeStatus] }}</div>
-          <div class="col-header-count">{{ visibleOrders.length }} order{{ visibleOrders.length !== 1 ? 's' : '' }}</div>
-          <div class="col-header-hint">Drag to reprioritise</div>
-        </div>
-
-        <!-- Empty state -->
-        <div v-if="visibleOrders.length === 0" class="empty-state">
-          <div class="es-icon">📭</div>
-          <div class="es-text">No orders</div>
-          <div class="es-sub">Try adjusting your filters</div>
-        </div>
-
-        <!-- Cards grid -->
-        <div v-else class="cards-grid">
-          <OrderCard
-            v-for="(order, i) in visibleOrders"
-            :key="order.id"
-            :order="order"
-            :selected="selectedId === order.id"
-            :style="{ animationDelay: i * 0.04 + 's' }"
-            @select="selectedId = $event"
-            @drag-start="dragId = $event"
-            @drag-end="dragId = null"
-            @reorder="handleReorder($event)"
-          />
+      <div class="priority-columns">
+        <div v-for="priority in ['High', 'Medium', 'Low']" :key="priority" 
+             class="p-col">
+          <!-- Column header -->
+          <div class="col-header">
+            <div class="col-header-dot" :style="{ background: PC[priority] }"></div>
+            <div class="col-header-label">{{ priority }} Priority</div>
+            <div class="col-header-count">{{ ordersByPriority(priority).length }}</div>
+          </div>
+          
+          <!-- Empty state -->
+          <div v-if="ordersByPriority(priority).length === 0" class="empty-state">
+            <div class="es-icon" style="opacity:0.3;font-size:24px">📭</div>
+            <div class="es-sub">Empty</div>
+          </div>
+          
+          <!-- Cards grid -->
+          <div v-else class="cards-list">
+            <OrderCard
+              v-for="(order, i) in ordersByPriority(priority)"
+              :key="order.id"
+              :order="order"
+              :selected="selectedId === order.id"
+              :style="{ animationDelay: i * 0.04 + 's' }"
+              @select="selectedId = $event"
+            />
+          </div>
         </div>
       </div>
 
@@ -89,7 +86,7 @@
     <NewOrderModal
       :visible="showModal"
       @close="showModal = false"
-      @submit="handleNewOrder"
+      @created="handleOrderCreated"
     />
 
     <!-- Toast -->
@@ -99,7 +96,7 @@
 </template>
 
 <script>
-import { useOrderStore, SC, SL } from './store.js'
+import { useOrderStore, SC, SL, PC } from './store.js'
 import AppTopbar        from '../components/AppTopbar.vue'
 import AppSearchbar     from '../components/AppSearchbar.vue'
 import AppToast         from '../components/AppToast.vue'
@@ -123,10 +120,9 @@ export default {
 
   data() {
     return {
-      SC, SL,
+      SC, SL, PC,
       activeStatus: 'inprocess',
       selectedId:   null,
-      dragId:       null,
       searchQ:      '',
       priFilter:    'all',
       showModal:    false,
@@ -173,10 +169,8 @@ export default {
       this.selectedId = null
     },
 
-    handleReorder({ toId, pos }) {
-      if (!this.dragId || this.dragId === toId) return
-      this.store.reorder(this.dragId, toId, pos)
-      this.$refs.toast.show('↕', 'Reordered', 'Priority updated')
+    ordersByPriority(priority) {
+      return this.visibleOrders.filter(o => o.priority === priority)
     },
 
 // In management.vue — replace handlePromote with this:
@@ -198,11 +192,11 @@ export default {
       }
     },
 
-    handleNewOrder(formData) {
-      const newId = this.store.addOrder(formData)
+    async handleOrderCreated(data) {
       this.showModal = false
+      await this.store.fetchOrders()
       this.switchTab('inprocess')
-      this.$refs.toast.show('✓', `${newId} created`, formData.customer || 'New Customer')
+      this.$refs.toast.show('✓', `${data.order_id} created`, `₹${data.total?.toLocaleString('en-IN') || 0}`)
     }
   }
 }
@@ -246,18 +240,41 @@ export default {
 .tab-count.active { background: var(--blue); color: #fff; border-color: var(--blue); }
 
 /* Board */
-.board       { flex: 1; display: flex; overflow: hidden; }
-.cards-panel { flex: 1; overflow-y: auto; padding: 18px 20px; }
-.cards-panel::-webkit-scrollbar { width: 3px; }
-.cards-panel::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+.board { flex: 1; display: flex; overflow: hidden; }
+
+.priority-columns {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  padding: 18px 20px;
+  overflow-x: auto;
+}
+.p-col {
+  flex: 1;
+  min-width: 250px;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+.cards-list::-webkit-scrollbar { width: 3px; }
+.cards-list::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
 
 /* Column header */
-.col-header        { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1.5px solid var(--border-2); }
+.col-header        { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1.5px solid var(--border-2); flex-shrink: 0; }
 .col-header-dot    { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .col-header-label  { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.6px; }
 .col-header-count  { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-4); }
-.col-header-hint   { margin-left: auto; font-size: 11px; color: var(--ink-4); }
 
-/* Cards grid */
-.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; align-items: start; }
+.empty-state       { opacity: 0.5; margin-top: 20px; }
 </style>
