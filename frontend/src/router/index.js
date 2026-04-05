@@ -17,6 +17,7 @@ export const routes = [
   { path: '/vendors', name: 'vendors', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: VendorManagement },
   { path: '/vendors/:vendorId', name: 'vendor-details', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: VendorManagement },
   { path: '/inventory', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: () => import('../inventory_management/inventory.vue') },
+  { path: '/ai-feature', meta: { requiresAuth: true, allowedRoles: ['admin'] }, component: () => import('../ai_feature/AIFeature.vue') },
   {
     path: '/store',
     meta: { hideShell: true },
