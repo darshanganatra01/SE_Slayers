@@ -22,15 +22,7 @@
           Pending Payments <span class="tab-count" :class="{ active: activeTab === 'payments' }">{{ customers.filter(c => c.pending > 0).length }}</span>
         </button>
         <div class="head-search-row">
-          <AppSearchbar v-model="searchQ" placeholder="Search customers…" />
-          <select class="tb-select" v-model="typeFilter">
-            <option value="all">All Types</option>
-            <option value="Platinum">High</option>
-            <option value="Gold">Medium</option>
-            <option value="Silver">Low</option>
-            <option value="At Risk">At Risk</option>
-          </select>
-          <button class="btn btn-primary" @click="openAdd">+ Add Customer</button>
+          <AppSearchbar v-model="searchQ" placeholder="Search customers…" style="width: 340px;" />
         </div>
       </div>
     </div>
@@ -54,18 +46,14 @@
                 <svg width="46" height="46" viewBox="0 0 46 46">
                   <circle cx="23" cy="23" r="18" fill="none" stroke="var(--border-2)" stroke-width="3.5"/>
                   <circle cx="23" cy="23" r="18" fill="none"
-                    :stroke="scoreColor(typeScore(c.type))" stroke-width="3.5" stroke-linecap="round"
-                    :stroke-dasharray="113.1"
-                    :stroke-dashoffset="113.1 * (1 - typeScore(c.type) / 100)"
-                    style="transform:rotate(-90deg);transform-origin:23px 23px;transition:stroke-dashoffset .6s ease"/>
+                    :stroke="acpColor(c.acp)" stroke-width="3.5" />
                 </svg>
-                <div class="ring-score" :style="{ color: scoreColor(typeScore(c.type)) }">{{ typeScore(c.type) }}</div>
+                <div class="ring-score" :style="{ color: acpColor(c.acp) }">{{ c.acp != null ? c.acp : 30 }}<span style="margin-left:2px;">D</span></div>
               </div>
               <div class="ccard-body">
                 <div class="ccard-name">{{ c.biz }}</div>
                 <div class="ccard-sub">{{ c.loc }}</div>
                 <div class="ccard-tags">
-                  <span class="chip" :style="{ background: TYPE_BG[c.type], color: TYPE_COLOR[c.type] }">{{ TYPE_LABEL[c.type] }}</span>
                   <span v-if="hasOverdue(c)" class="chip" style="background:var(--red-dim);color:var(--red)">⚠ Overdue</span>
                 </div>
               </div>
@@ -97,25 +85,22 @@
                   <svg width="72" height="72" viewBox="0 0 72 72">
                     <circle cx="36" cy="36" r="28" fill="none" stroke="var(--border-2)" stroke-width="5"/>
                     <circle cx="36" cy="36" r="28" fill="none"
-                      :stroke="scoreColor(typeScore(selectedCustomer.type))" stroke-width="5" stroke-linecap="round"
-                      :stroke-dasharray="175.9"
-                      stroke-dashoffset="175.9"
-                      class="ring-arc"
-                      :style="{ '--target-offset': 175.9 * (1 - typeScore(selectedCustomer.type) / 100) }"/>
+                      :stroke="acpColor(selectedCustomer.acp)" stroke-width="5" />
                   </svg>
                   <div class="big-ring-score">
-                    <div class="num" :style="{ color: scoreColor(typeScore(selectedCustomer.type)) }">{{ typeScore(selectedCustomer.type) }}</div>
+                    <div class="num" :style="{ color: acpColor(selectedCustomer.acp) }">{{ selectedCustomer.acp != null ? selectedCustomer.acp : 30 }}<span style="margin-left: 3px;">D</span></div>
                     <div class="lbl">ACP</div>
                   </div>
                 </div>
                 <div class="dp-head-info">
                   <div class="dp-cname">{{ selectedCustomer.biz }}</div>
                   <div class="dp-cmeta">{{ selectedCustomer.loc }} · {{ selectedCustomer.phone }}</div>
-                  <div class="dp-chip-row">
-                    <span class="chip" :style="{ background: TYPE_BG[selectedCustomer.type], color: TYPE_COLOR[selectedCustomer.type] }">{{ TYPE_LABEL[selectedCustomer.type] }}</span>
+                  <div class="dp-chip-row" v-if="hasOverdue(selectedCustomer)">
+                    <span class="chip" style="background:var(--red-dim);color:var(--red)">⚠ Overdue</span>
                   </div>
                 </div>
                 <button class="btn btn-outline" @click="openEdit(selectedCustomer)">Edit</button>
+                <button class="btn btn-primary" v-if="selectedCustomer.pending > 0" style="margin-left: 8px;" @click="openCollectModal(selectedCustomer)">Collect Payment</button>
               </div>
               <div class="dp-stat-bar">
                 <div class="dp-stat"><div class="dp-stat-val">{{ selectedCustomer.totalOrders }}</div><div class="dp-stat-lbl">Orders</div></div>
@@ -194,7 +179,7 @@
                 <div class="lc-type">{{ c.loc }}</div>
               </div>
               <div style="text-align:right">
-                <div class="lc-score" :style="{ color: scoreColor(typeScore(c.type)) }">{{ typeScore(c.type) }}</div>
+                <div class="lc-score" :style="{ color: acpColor(c.acp) }">{{ c.acp != null ? c.acp : 30 }}<span style="margin-left: 2px;">D</span></div>
                 <div style="font-size:9.5px;color:var(--ink-4)">ACP</div>
               </div>
             </div>
@@ -208,7 +193,6 @@
               </div>
               <div class="lc-foot">
                 <span>Pay avg: <strong>{{ c.avgPayDays===0?'Same day':c.avgPayDays+'d' }}</strong></span>
-                <span :style="{ color: TYPE_COLOR[c.type], fontWeight:700 }">{{ TYPE_LABEL[c.type] }}</span>
               </div>
             </div>
           </div>
@@ -252,6 +236,30 @@
       </div>
     </div>
 
+    <!-- Collect Payment Modal -->
+    <div v-if="showCollectModal" class="mo" @click.self="showCollectModal=false">
+      <div class="mo-box" style="width: 400px">
+        <div class="mo-head">
+          <div class="mo-title">Collect Payment (FIFO)</div>
+          <div class="mo-x" @click="showCollectModal=false">✕</div>
+        </div>
+        <div class="mo-body">
+          <div class="fg">
+            <label class="fl">Amount to Collect (₹)</label>
+            <input class="fi" type="number" v-model.number="collectAmount" :max="collectTargetCustomer?.pending" placeholder="0.00" />
+            <div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">
+              Will automatically settle the oldest pending invoices first. 
+              Max pending: ₹{{ (collectTargetCustomer?.pending || 0).toLocaleString('en-IN') }}
+            </div>
+          </div>
+        </div>
+        <div class="mo-foot">
+          <button class="btn-cancel" @click="showCollectModal=false">Cancel</button>
+          <button class="btn btn-primary" :disabled="!collectAmount || collectAmount <= 0" @click="submitCollection">Collect</button>
+        </div>
+      </div>
+    </div>
+
     <AppToast ref="toast" />
   </main>
 </template>
@@ -274,46 +282,17 @@ export default {
       searchQ: '', typeFilter: 'all',
       showModal: false, editingId: null,
       form: { name:'', biz:'', phone:'', email:'', loc:'', type:'Platinum' },
+      showCollectModal: false, collectAmount: 0, collectTargetCustomer: null,
       sortOptions: [
         { key:'name',    label:'Name'      },
         { key:'pending', label:'Pending ↓' },
         { key:'score',   label:'ACP ↓'   }
       ],
-      customers: [
-        { id:'CST-001', name:'Arjun Mehta',  biz:'Mehta Garage',     phone:'+91 98401 11111', email:'arjun@mehta.com',  loc:'Chennai',    type:'Platinum', credit:300000, pending:12400, totalOrders:28, totalValue:520000, avgPayDays:0,
-          invoices:[{id:'INV-312',desc:'Order ORD-4821',amount:12400,due:'Mar 12',status:'pending'},{id:'INV-290',desc:'Order ORD-4789',amount:8200,due:'Feb 28',status:'paid'}],
-          orders:[{id:'ORD-4821',date:'Mar 8',value:12400,status:'In-Process',paid:'Pending'},{id:'ORD-4789',date:'Feb 20',value:8200,status:'Shipped',paid:'Paid'}],
-          payHistory:[{date:'Feb 28',type:'payment',amount:8200,note:'Paid same day'},{date:'Feb 1',type:'payment',amount:15600,note:'Paid in 1 day'}] },
-        { id:'CST-002', name:'Priya Sharma', biz:'Sharma Auto Works', phone:'+91 98402 22222', email:'priya@sharma.in', loc:'T. Nagar',   type:'Gold',     credit:200000, pending:8750,  totalOrders:19, totalValue:310000, avgPayDays:5,
-          invoices:[{id:'INV-311',desc:'Order ORD-4819',amount:8750,due:'Mar 16',status:'pending'},{id:'INV-295',desc:'Order ORD-4795',amount:6500,due:'Mar 1',status:'paid'}],
-          orders:[{id:'ORD-4819',date:'Mar 8',value:8750,status:'In-Process',paid:'Pending'},{id:'ORD-4795',date:'Feb 22',value:6500,status:'Shipped',paid:'Paid'}],
-          payHistory:[{date:'Mar 1',type:'payment',amount:6500,note:'Paid in 6 days'}] },
-        { id:'CST-003', name:'Kiran Nair',   biz:'Nair Spare Parts',  phone:'+91 98403 33333', email:'kiran@nair.co',   loc:'Velachery', type:'Silver',   credit:150000, pending:5100,  totalOrders:12, totalValue:180000, avgPayDays:12,
-          invoices:[{id:'INV-310',desc:'Order ORD-4816',amount:5100,due:'Mar 20',status:'pending'}],
-          orders:[{id:'ORD-4816',date:'Mar 8',value:5100,status:'In-Process',paid:'Pending'},{id:'ORD-4780',date:'Feb 5',value:9300,status:'Shipped',paid:'Paid'}],
-          payHistory:[{date:'Feb 19',type:'payment',amount:9300,note:'Paid in 14 days'}] },
-        { id:'CST-004', name:'Deepak Rao',   biz:'Rao Mechanics',     phone:'+91 98404 44444', email:'deepak@rao.in',   loc:'Adyar',     type:'Silver',   credit:100000, pending:3200,  totalOrders:8,  totalValue:95000,  avgPayDays:27,
-          invoices:[{id:'INV-309',desc:'Order ORD-4812',amount:3200,due:'Apr 5',status:'pending'},{id:'INV-280',desc:'Order ORD-4760',amount:4800,due:'Feb 10',status:'overdue'}],
-          orders:[{id:'ORD-4812',date:'Mar 8',value:3200,status:'In-Process',paid:'Pending'},{id:'ORD-4760',date:'Jan 25',value:4800,status:'Shipped',paid:'Overdue'}],
-          payHistory:[{date:'Jan 25',type:'invoice',amount:4800,note:'Invoice raised – still pending'},{date:'Dec 15',type:'payment',amount:6200,note:'Paid in 28 days'}] },
-        { id:'CST-005', name:'Suresh Babu',  biz:'Babu Auto',         phone:'+91 98405 55555', email:'suresh@babu.net', loc:'Porur',     type:'Platinum', credit:400000, pending:0,     totalOrders:42, totalValue:890000, avgPayDays:0,
-          invoices:[{id:'INV-306',desc:'Order ORD-4803',amount:18900,due:'Mar 10',status:'paid'}],
-          orders:[{id:'ORD-4803',date:'Mar 8',value:18900,status:'Shipped',paid:'Paid'},{id:'ORD-4771',date:'Feb 12',value:22000,status:'Shipped',paid:'Paid'}],
-          payHistory:[{date:'Mar 8',type:'payment',amount:18900,note:'Same day payment'}] },
-        { id:'CST-006', name:'Neha Patel',   biz:'Patel Car Care',    phone:'+91 98406 66666', email:'neha@patel.in',   loc:'Mylapore',  type:'Gold',     credit:180000, pending:9600,  totalOrders:15, totalValue:260000, avgPayDays:6,
-          invoices:[{id:'INV-308',desc:'Order ORD-4808',amount:9600,due:'Mar 19',status:'pending'}],
-          orders:[{id:'ORD-4808',date:'Mar 8',value:9600,status:'Packed',paid:'Pending'},{id:'ORD-4778',date:'Feb 18',value:7100,status:'Shipped',paid:'Paid'}],
-          payHistory:[{date:'Feb 24',type:'payment',amount:7100,note:'Paid in 6 days'}] },
-        { id:'CST-007', name:'Meena Das',    biz:'Das Motors',        phone:'+91 98407 77777', email:'meena@das.co',    loc:'Guindy',    type:'At Risk',  credit:80000,  pending:14200, totalOrders:6,  totalValue:72000,  avgPayDays:45,
-          invoices:[{id:'INV-307',desc:'Order ORD-4798',amount:6400,due:'Feb 22',status:'overdue'},{id:'INV-299',desc:'Order ORD-4770',amount:7800,due:'Feb 1',status:'overdue'}],
-          orders:[{id:'ORD-4798',date:'Mar 8',value:6400,status:'Shipped',paid:'Overdue'},{id:'ORD-4770',date:'Jan 20',value:7800,status:'Shipped',paid:'Overdue'}],
-          payHistory:[{date:'Jan 20',type:'invoice',amount:7800,note:'Invoice raised – 46 days overdue'}] },
-        { id:'CST-008', name:'Raj Iyer',     biz:'Iyer Service Hub',  phone:'+91 98408 88888', email:'raj@iyer.co',     loc:'Anna Nagar',type:'Gold',     credit:120000, pending:4400,  totalOrders:10, totalValue:145000, avgPayDays:13,
-          invoices:[{id:'INV-305',desc:'Parts replenishment',amount:4400,due:'Mar 25',status:'pending'}],
-          orders:[{id:'ORD-4801',date:'Mar 5',value:4400,status:'Packed',paid:'Pending'},{id:'ORD-4765',date:'Feb 8',value:8800,status:'Shipped',paid:'Paid'}],
-          payHistory:[{date:'Feb 21',type:'payment',amount:8800,note:'Paid in 13 days'}] },
-      ]
+      customers: []
     }
+  },
+  async mounted() {
+    await this.fetchCustomers()
   },
   computed: {
     today() { return new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}).toUpperCase() },
@@ -333,8 +312,24 @@ export default {
     }
   },
   methods: {
+    async fetchCustomers() {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch('http://127.0.0.1:5000/api/internal-portal/customers', { headers })
+        if (res.ok) {
+          this.customers = await res.json()
+        }
+      } catch (e) {
+        console.error("Failed to load customers:", e)
+      }
+    },
     typeScore(type) { return {Platinum:95,Gold:80,Silver:50,'At Risk':20}[type]||50 },
     scoreColor(s)   { return s>=85?'var(--green)':s>=70?'var(--amber)':'var(--red)' },
+    acpColor(acp)   { const v = acp != null ? acp : 30; return v <= 15 ? 'var(--green)' : v <= 30 ? 'var(--amber)' : 'var(--red)' },
+    acpRingPct(acp) { const v = acp != null ? acp : 30; return Math.max(0, Math.min(100, 100 - v)) },
     fmtINR(n)       { return '₹'+Number(n).toLocaleString('en-IN') },
     initials(name)  { return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() },
     hasOverdue(c)   { return c.invoices.some(i=>i.status==='overdue') },
@@ -356,6 +351,32 @@ export default {
         this.$refs.toast.show('✓','Customer added',this.form.biz)
       }
       this.showModal=false; this.editingId=null
+    },
+    openCollectModal(c) {
+      this.collectTargetCustomer = c;
+      this.collectAmount = c.pending;
+      this.showCollectModal = true;
+    },
+    async submitCollection() {
+      if (!this.collectAmount || this.collectAmount <= 0) return;
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/internal-portal/collect-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cid: this.collectTargetCustomer.id, amount: this.collectAmount })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          this.$refs.toast.show('✓', 'Payment collected', `₹${data.collected.toLocaleString('en-IN')} allocated via FIFO`);
+          this.showCollectModal = false;
+          await this.fetchCustomers(); // refresh the data and invoices
+        } else {
+          const err = await res.json();
+          this.$refs.toast.show('❌', 'Collection Failed', err.message);
+        }
+      } catch (e) {
+        this.$refs.toast.show('❌', 'Error', e.message);
+      }
     },
     downloadCustomerInvoice(inv, customer) {
       const html = `<!DOCTYPE html>

@@ -56,19 +56,27 @@
           </template>
         </div>
         <button
-          v-if="order.status !== 'shipped'"
+          v-if="order.status === 'inprocess'"
           class="dp-action-btn dp-btn-fwd"
           @click="onForwardClick"
         >
           → Mark as {{ SL[nextStatus] }}
         </button>
-        <button
-          v-if="order.status === 'packed'"
-          class="dp-action-btn dp-btn-back"
-          @click="onBackClick"
-        >
-          ← Back to {{ SL[prevStatus] }}
-        </button>
+        <template v-if="order.status === 'packed'">
+          <button
+            class="dp-action-btn dp-btn-fwd"
+            :disabled="isShipping"
+            @click="confirmShipAndInvoice"
+          >
+            {{ isShipping ? 'Shipping…' : '→ Move to Shipped & Send Invoice' }}
+          </button>
+          <button
+            class="dp-action-btn dp-btn-back"
+            @click="onBackClick"
+          >
+            ← Back to {{ SL[prevStatus] }}
+          </button>
+        </template>
         <button
           v-if="order.status === 'shipped'"
           class="dp-action-btn"
@@ -142,9 +150,9 @@ export default {
       CC, CB, CL, PC, PB, SC, SL,
       steps: ['inprocess', 'packed', 'shipped'],
       showPackingModal:   false,
-      showTransportModal: false,
       selectedTransport:  '',
-      isMarkingReceived: false
+      isMarkingReceived: false,
+      isShipping: false
     }
   },
   setup() {
@@ -170,9 +178,6 @@ export default {
     onForwardClick() {
       if (this.nextStatus === 'packed') {
         this.showPackingModal = true
-      } else if (this.nextStatus === 'shipped') {
-        this.selectedTransport = ''
-        this.showTransportModal = true
       } else {
         this.$emit('promote', { id: this.order.id, newStatus: this.nextStatus })
       }
@@ -186,22 +191,24 @@ export default {
       this.showPackingModal = false
     },
     async confirmShipAndInvoice() {
-      if (!this.selectedTransport) return
-      
       const pslip_ids = this.order.pslip_ids || []
       if (pslip_ids.length === 0) {
         alert('No packed items to ship.')
-        this.showTransportModal = false
         return
       }
 
-      for (const pslip_id of pslip_ids) {
-        await this.store.ship(pslip_id, this.selectedTransport)
+      this.isShipping = true
+      // Save a snapshot before async refresh replaces the order
+      const orderSnapshot = JSON.parse(JSON.stringify(this.order))
+
+      try {
+        for (const pslip_id of pslip_ids) {
+          await this.store.ship(pslip_id, '')
+        }
+        this.downloadInvoice(orderSnapshot)
+      } finally {
+        this.isShipping = false
       }
-      
-      this.downloadInvoice(this.order)
-      this.showTransportModal = false
-      this.selectedTransport = ''
     },
     async handleMarkReceived() {
       if (!this.order.cinv_ids || this.order.cinv_ids.length === 0) {
@@ -385,21 +392,15 @@ export default {
 .slip-btn.unpack:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
 .shipped-note { font-size: 11px; font-weight: 600; color: var(--green); display: flex; align-items: center; gap: 4px; }
 
-/* Transport modal */
-.tr-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 400;
-  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
+/* Inline ship section */
+.dp-ship-inline {
+  background: var(--surface); border: 1.5px solid var(--border-2);
+  border-radius: 8px; padding: 12px; margin-bottom: 8px;
 }
-.tr-box {
-  background: var(--white); border: 1.5px solid var(--border);
-  border-radius: 10px; width: 340px; box-shadow: 0 8px 30px rgba(0,0,0,.12);
+.dp-ship-inline .fi {
+  width: 100%; padding: 7px 10px; background: var(--white); border: 1.5px solid var(--border);
+  border-radius: 6px; color: var(--ink); font-size: 12px; outline: none;
+  font-family: 'Geist', sans-serif; cursor: pointer;
 }
-.tr-head {
-  padding: 16px 18px 12px; border-bottom: 1.5px solid var(--border);
-  display: flex; justify-content: space-between; align-items: center;
-}
-.tr-title { font-size: 14px; font-weight: 600; color: var(--ink); }
-.tr-body  { padding: 16px 18px; }
-.tr-foot  { padding: 12px 18px; border-top: 1.5px solid var(--border); display: flex; justify-content: flex-end; gap: 7px; }
 .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

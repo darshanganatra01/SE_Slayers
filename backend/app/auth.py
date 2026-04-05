@@ -96,22 +96,15 @@ def auth_required(*roles: str):
 def serialize_user(user: User) -> dict:
     customer = None
     if user.is_customer:
-        customer_row = (
-            Customer.query.with_entities(
-                Customer.cid,
-                Customer.customer_name,
-                Customer.email,
-                Customer.contact,
-            )
-            .filter_by(uid=user.uid)
-            .first()
-        )
+        customer_row = Customer.query.filter_by(uid=user.uid).first()
         if customer_row is not None:
             customer = {
                 "cid": customer_row.cid,
                 "customer_name": customer_row.customer_name,
                 "email": customer_row.email,
                 "contact": customer_row.contact,
+                "location": customer_row.location,
+                "pincode": customer_row.pincode,
             }
 
     return {
@@ -120,18 +113,7 @@ def serialize_user(user: User) -> dict:
         "email": user.email,
         "role": user.role,
         "is_active": user.is_active,
-        "customer": (
-            {
-                "cid": customer.cid,
-                "customer_name": customer.customer_name,
-                "email": customer.email,
-                "contact": customer.contact,
-                "location": customer.location,
-                "pincode": customer.pincode,
-            }
-            if customer is not None
-            else None
-        ),
+        "customer": customer,
     }
 
 

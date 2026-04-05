@@ -4,12 +4,6 @@
     <AppTopbar title="Overview" :meta="today">
       <template #actions>
         <AppSearchbar v-model="searchQ" placeholder="Search…" />
-        <button class="btn btn-outline">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-        </button>
         <button class="btn btn-primary" @click="$router.push('/orders')">New order</button>
       </template>
     </AppTopbar>
@@ -35,18 +29,18 @@
         </div>
         <div class="ov-metric">
           <div class="ov-metric-label">Quarterly revenue</div>
-          <div class="ov-metric-value ov-metric-lg">₹8,40,000</div>
+          <div class="ov-metric-value ov-metric-lg">{{ fmtINR(metrics.quarterlyRevenue) }}</div>
           <span class="ov-tag ov-tag-g">↑ 18% vs Q3</span>
         </div>
       </div>
 
-      <div class="ov-alert">
+      <div class="ov-alert" v-if="overdueAlert && overdueAlert.amount > 0">
         <svg width="14" height="14" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <div><strong>₹57,400 overdue</strong><span>&nbsp;— 3 customers, longest outstanding 14 days</span></div>
+        <div><strong>{{ fmtINR(overdueAlert.amount) }} overdue</strong><span>&nbsp;— {{ overdueAlert.customers }} customers, longest outstanding {{ overdueAlert.longestOutstanding }} days</span></div>
         <button class="ov-alert-link" @click="$router.push('/customers')">View overdue →</button>
       </div>
 
@@ -131,29 +125,16 @@ export default {
   data() {
     return {
       searchQ: '',
-      metrics: { pending: 10, highPriority: 12, lowStock: 9 },
-      priorityOrders: [
-        { id: 'ORD-4823', name: 'Arjun Mehta',  placedOn: 'March 8 2026', val: '₹12,400', score: 0  },
-        { id: 'ORD-4821', name: 'Priya Sharma', placedOn: 'March 8 2026', val: '₹8,750',  score: 5  },
-        { id: 'ORD-4818', name: 'Ravi Kumar',   placedOn: 'March 7 2026', val: '₹22,100', score: 12 },
-        { id: 'ORD-4815', name: 'Neha Patel',   placedOn: 'March 6 2026', val: '₹5,300',  score: 27 },
-        { id: 'ORD-4812', name: 'Meena Das',    placedOn: 'March 5 2026', val: '₹14,600', score: 45 },
-      ],
-      activityFeed: [
-        { color: '#2563eb', title: 'Order placed',    desc: 'ORD-4823 · Arjun Mehta',       amt: '₹12,400', amtColor: '#09090b', time: '2m'  },
-        { color: '#16a34a', title: 'Payment in',      desc: 'INV-309 · Priya Sharma',        amt: '₹8,750',  amtColor: '#16a34a', time: '18m' },
-        { color: '#dc2626', title: 'Invoice overdue', desc: 'INV-301 · Meena Das · 14 days', amt: '₹6,400',  amtColor: '#dc2626', time: '1h'  },
-        { color: '#2563eb', title: 'Order shipped',   desc: 'ORD-4809 · Suresh Babu',        amt: '₹18,900', amtColor: '#09090b', time: '2h'  },
-        { color: '#16a34a', title: 'Payment in',      desc: 'INV-305 · Raj Iyer',            amt: '₹4,400',  amtColor: '#16a34a', time: '3h'  },
-        { color: '#d97706', title: 'Invoice raised',  desc: 'INV-312 · Kiran Nair · Mar 20', amt: '₹5,100',  amtColor: '#09090b', time: '4h'  },
-      ],
-      lowStockItems: [
-        { name: 'Brake Pads B200',    qty: 4, max: 10 },
-        { name: 'Engine Filter EF-X', qty: 2, max: 8  },
-        { name: 'Spark Plug SP-9',    qty: 7, max: 15 },
-        { name: 'Oil Filter OF-44',   qty: 3, max: 12 },
-      ]
+      loading: true,
+      metrics: { pending: 0, highPriority: 0, lowStock: 0, quarterlyRevenue: 0 },
+      priorityOrders: [],
+      activityFeed: [],
+      lowStockItems: [],
+      overdueAlert: { amount: 0, customers: 0, longestOutstanding: 0 }
     }
+  },
+  async mounted() {
+    await this.fetchOverview()
   },
   computed: {
     today() {
@@ -165,6 +146,28 @@ export default {
     }
   },
   methods: {
+    async fetchOverview() {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const res = await fetch('http://127.0.0.1:5000/api/internal-portal/overview', { headers })
+        if (res.ok) {
+          const data = await res.json()
+          this.metrics = data.metrics || this.metrics
+          this.priorityOrders = data.priorityOrders || []
+          this.activityFeed = data.activityFeed || []
+          this.lowStockItems = data.lowStockItems || []
+          this.overdueAlert = data.overdue || this.overdueAlert
+        }
+      } catch (e) {
+        console.error("Failed to load overview data:", e)
+      } finally {
+        this.loading = false
+      }
+    },
+    fmtINR(n) { return '₹'+Number(n).toLocaleString('en-IN') },
     scoreColor(s) { return s <= 7 ? '#16a34a' : s <= 20 ? '#d97706' : '#dc2626' },
     pct(s)        { return Math.round((s.qty / s.max) * 100) },
     stockColor(s) {
