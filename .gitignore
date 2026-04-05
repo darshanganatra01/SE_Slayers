@@ -40,3 +40,16 @@ __screenshots__/
 
 test-results/
 playwright-report/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments
+.env
+.venv/
+venv/
