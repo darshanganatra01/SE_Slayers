@@ -10,7 +10,7 @@
           v-model:location="filterLocation"
           :locations="uniqueLocations"
         />
-        <button class="btn btn-primary" @click="showAddVendor = true">+ Add Vendor</button>
+        <button class="btn btn-primary" @click="notifyAddVendorComingSoon">+ Add Vendor</button>
       </template>
     </AppTopbar>
 
@@ -19,7 +19,7 @@
       <div class="head-top">
         <div>
           <div class="head-title">Vendors</div>
-          <div class="head-sub">{{ store.activeVendorCount }} Active Vendors</div>
+          <div class="head-sub">{{ pageSubtitle }}</div>
         </div>
       </div>
       <div class="tabs">
@@ -43,27 +43,31 @@
 
     <!-- Vendor List tab -->
     <div v-if="activeTab === 'list'" class="tab-body tab-list">
-      <VendorTable :vendors="filteredVendors" @select="selectVendor" />
+      <div v-if="store.directoryError" class="vendor-error">{{ store.directoryError }}</div>
+      <VendorTable :vendors="filteredVendors" :loading="store.directoryLoading" @select="selectVendor" />
     </div>
 
     <!-- Vendor Details tab -->
     <div v-else-if="activeTab === 'details'" class="tab-body">
       <VendorDetails
         :vendor="selectedVendor"
-        @back="switchTab('list')"
+        :loading="store.vendorDetailLoading"
+        :error="store.vendorDetailError"
+        @back="goBackToList"
       />
     </div>
 
     <!-- Part Search & Compare tab -->
     <div v-else-if="activeTab === 'compare'" class="tab-body tab-compare">
       <PartList
-        :parts="store.parts"
+        :parts="store.compareParts"
+        :loading="store.compareLoading"
+        :error="store.compareError"
         :selected-part-id="selectedPartId"
         @select="selectedPartId = $event"
       />
       <PartDetailPanel
         :part="selectedPart"
-        :vendors="store.vendors"
         @select-vendor="handleVendorSelected"
       />
     </div>
@@ -72,24 +76,17 @@
     <div v-else-if="activeTab === 'procurement'" class="tab-body tab-compare">
       <ProcurementHistory
         :procurements="store.procurements"
-        :vendors="store.vendors"
+        :vendors="procurementVendors"
         :selected-id="selectedProcurementId"
         @select="selectedProcurementId = $event"
         @mark-received="handleMarkReceived"
       />
     </div>
 
-    <!-- Add Vendor Modal -->
-    <AddVendorModal
-      :visible="showAddVendor"
-      @close="showAddVendor = false"
-      @submit="handleAddVendor"
-    />
-
     <!-- Procurement Request Modal -->
     <ProcurementModal
       :visible="showProcurement"
-      :vendors="store.vendors"
+      :vendors="procurementVendors"
       :prefill="procurementPrefill"
       @close="showProcurement = false"
       @submit="handleProcurement"
@@ -111,7 +108,6 @@ import VendorTable         from './components/VendorTable.vue'
 import VendorDetails       from './components/VendorDetails.vue'
 import PartList            from './components/PartList.vue'
 import PartDetailPanel     from './components/PartDetailPanel.vue'
-import AddVendorModal      from './components/AddVendorModal.vue'
 import ProcurementModal    from './components/ProcurementModal.vue'
 import ProcurementHistory  from './components/ProcurementHistory.vue'
 
@@ -120,7 +116,7 @@ export default {
   components: {
     AppTopbar, AppSearchbar, AppToast, FilterBar,
     VendorTable, VendorDetails, PartList, PartDetailPanel,
-    AddVendorModal, ProcurementModal, ProcurementHistory
+    ProcurementModal, ProcurementHistory
   },
 
   setup() {
@@ -138,7 +134,6 @@ export default {
       selectedVendorId: null,
       selectedProcurementId: null,
 
-      showAddVendor:      false,
       showProcurement:    false,
       procurementPrefill: null,
 
@@ -151,18 +146,37 @@ export default {
     }
   },
 
+  mounted() {
+    this.store.fetchVendorDirectory()
+    this.store.fetchCompareCatalog()
+  },
+
   computed: {
     headMeta() {
+      if (this.store.directoryLoading) return 'Loading vendor directory...'
+      return `${this.store.activeVendorCount} Active Vendors`
+    },
+    pageSubtitle() {
+      if (this.store.directoryLoading) return 'Loading vendors...'
       return `${this.store.activeVendorCount} Active Vendors`
     },
     uniqueLocations() {
-      return [...new Set(this.store.vendors.map(v => v.location))].sort()
+      return [...new Set(this.store.directoryVendors.map(v => v.location).filter(Boolean))].sort()
     },
     procurementPendingCount() {
       return this.store.procurements.filter(r => r.status === 'pending').length
     },
+    procurementVendors() {
+      const combined = [...this.store.directoryVendors]
+      for (const vendor of this.store.vendors) {
+        if (!combined.some(item => item.id === vendor.id)) {
+          combined.push(vendor)
+        }
+      }
+      return combined
+    },
     filteredVendors() {
-      let list = this.store.vendors
+      let list = this.store.directoryVendors
       if (this.searchQ) {
         const q = this.searchQ.toLowerCase()
         list = list.filter(v =>
@@ -170,9 +184,9 @@ export default {
         )
       }
       if (this.filterLeadTime !== 'all') {
-        if (this.filterLeadTime === 'fast')        list = list.filter(v => v.leadTime <= 3)
-        else if (this.filterLeadTime === 'medium') list = list.filter(v => v.leadTime >= 4 && v.leadTime <= 7)
-        else if (this.filterLeadTime === 'slow')   list = list.filter(v => v.leadTime > 7)
+        if (this.filterLeadTime === 'fast') list = list.filter(v => v.leadTime != null && v.leadTime <= 3)
+        else if (this.filterLeadTime === 'medium') list = list.filter(v => v.leadTime != null && v.leadTime >= 4 && v.leadTime <= 7)
+        else if (this.filterLeadTime === 'slow') list = list.filter(v => v.leadTime != null && v.leadTime > 7)
       }
       if (this.filterLocation !== 'all') {
         list = list.filter(v => v.location === this.filterLocation)
@@ -180,25 +194,62 @@ export default {
       return list
     },
     selectedVendor() {
-      if (!this.selectedVendorId) return null
-      return this.store.findVendorById(this.selectedVendorId) || null
+      return this.store.selectedDirectoryVendor
     },
     selectedPart() {
       if (!this.selectedPartId) return null
-      return this.store.parts.find(p => p.id === this.selectedPartId) || null
+      return this.store.compareParts.find(p => p.id === this.selectedPartId) || null
+    }
+  },
+
+  watch: {
+    '$route.params.vendorId': {
+      immediate: true,
+      handler(vendorId) {
+        this.syncVendorRoute(typeof vendorId === 'string' ? vendorId : '')
+      }
     }
   },
 
   methods: {
     switchTab(key) {
       this.activeTab = key
-      if (key !== 'details') this.selectedVendorId = null
+      if (key !== 'details') {
+        this.selectedVendorId = null
+        this.store.clearVendorDetails()
+        if (this.$route.params.vendorId) {
+          this.$router.push({ name: 'vendors' })
+        }
+      }
       if (key !== 'procurement') this.selectedProcurementId = null
     },
 
     selectVendor(vendorId) {
-      this.selectedVendorId = vendorId
-      this.activeTab = 'details'
+      if (!vendorId) return
+      this.$router.push({ name: 'vendor-details', params: { vendorId } })
+    },
+
+    async syncVendorRoute(vendorId) {
+      this.selectedVendorId = vendorId || null
+
+      if (this.selectedVendorId) {
+        this.activeTab = 'details'
+        await this.store.fetchVendorDetails(this.selectedVendorId)
+        return
+      }
+
+      this.store.clearVendorDetails()
+      if (this.activeTab === 'details') {
+        this.activeTab = 'list'
+      }
+    },
+
+    goBackToList() {
+      this.$router.push({ name: 'vendors' })
+    },
+
+    notifyAddVendorComingSoon() {
+      this.$refs.toast.show('+', 'Vendor creation will be added later', 'This screen now uses live vendor data')
     },
 
     // Called when user picks a vendor in PartDetailPanel → open procurement form
@@ -211,27 +262,11 @@ export default {
       this.showProcurement = true
     },
 
-    handleAddVendor(formData) {
-      const newVendor = {
-        id:        formData.id || 'VND-' + String(this.store.vendors.length + 1).padStart(3, '0'),
-        name:      formData.name || 'New Vendor',
-        leadTime:  formData.leadTime || 3,
-        frequency: 'Weekly',
-        location:  formData.location || 'Unknown',
-        rating:    4.0,
-        parts:     formData.parts ? formData.parts.split(',').map(s => s.trim()).filter(Boolean) : [],
-        contact:   { phone: formData.phone || '', email: formData.email || '' }
-      }
-      this.store.vendors.push(newVendor)
-      this.showAddVendor = false
-      this.$refs.toast.show('✓', `${newVendor.name} added`, newVendor.id)
-    },
-
     handleProcurement(formData) {
       const newId = this.store.addProcurement(formData, formData.vendorId)
       this.showProcurement = false
       const vendorName = formData.vendorId
-        ? (this.store.findVendorById(formData.vendorId)?.name || formData.vendorId)
+        ? (this.store.findDirectoryVendorById(formData.vendorId)?.name || this.store.findVendorById(formData.vendorId)?.name || formData.vendorId)
         : '—'
       this.$refs.toast.show('📋', `${newId} submitted`, `${formData.partName} → ${vendorName}`)
     },
@@ -274,4 +309,13 @@ export default {
 .tab-body    { flex: 1; overflow-y: auto; }
 .tab-list    { padding: 18px 22px; }
 .tab-compare { display: flex; overflow: hidden; }
+.vendor-error {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1.5px solid #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 13px;
+}
 </style>

@@ -1,31 +1,27 @@
 <template>
   <tr class="vendor-row" @click="$emit('select', vendor.id)">
-    <!-- Vendor name + ID -->
     <td>
       <div class="vr-name">{{ vendor.name }}</div>
       <div class="vr-id">{{ vendor.id }}</div>
     </td>
 
-    <!-- Parts supplied -->
     <td>
       <div class="vr-parts">
         <VendorTag v-for="part in visibleParts" :key="part" :label="part" />
         <span v-if="extraCount > 0" class="vr-extra">+{{ extraCount }}</span>
+        <span v-if="vendor.parts.length === 0" class="vr-empty">No products mapped</span>
       </div>
     </td>
 
-    <!-- Lead time -->
     <td>
       <div class="vr-lead">
         <span class="vr-lead-dot" :style="{ background: leadColor }"></span>
-        {{ vendor.leadTime }} day{{ vendor.leadTime !== 1 ? 's' : '' }}
+        {{ leadLabel }}
       </div>
     </td>
 
-    <!-- Location -->
     <td>{{ vendor.location }}</td>
 
-    <!-- Contact -->
     <td>
       <div class="vr-phone">{{ vendor.contact.phone }}</div>
       <div class="vr-email">{{ vendor.contact.email }}</div>
@@ -50,7 +46,12 @@ export default {
     extraCount() {
       return Math.max(0, this.vendor.parts.length - 2)
     },
+    leadLabel() {
+      if (this.vendor.leadTime == null) return 'Not set'
+      return `${this.vendor.leadTime} day${this.vendor.leadTime !== 1 ? 's' : ''}`
+    },
     leadColor() {
+      if (this.vendor.leadTime == null) return 'var(--border-2)'
       if (this.vendor.leadTime <= 3) return 'var(--green)'
       if (this.vendor.leadTime <= 7) return 'var(--amber)'
       return 'var(--red)'
@@ -101,7 +102,7 @@ export default {
   padding: 1px 5px;
   border-radius: 4px;
 }
-
+.vr-empty { font-size: 11px; color: var(--ink-4); }
 .vr-lead {
   display: inline-flex;
   align-items: center;

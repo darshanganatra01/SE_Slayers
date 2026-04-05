@@ -37,7 +37,7 @@
             <span class="k">Lead Time</span>
             <span class="v dp-lead">
               <span class="dp-lead-dot" :style="{ background: leadColor(vendor.leadTime) }"></span>
-              {{ vendor.leadTime }} day{{ vendor.leadTime !== 1 ? 's' : '' }}
+              {{ leadLabel(vendor.leadTime) }}
             </span>
           </div>
         </div>
@@ -97,9 +97,14 @@ export default {
       return s === 'received' ? 'Received' : 'Pending'
     },
     leadColor(days) {
+      if (days == null) return 'var(--border-2)'
       if (days <= 3) return 'var(--green)'
       if (days <= 7) return 'var(--amber)'
       return 'var(--red)'
+    },
+    leadLabel(days) {
+      if (days == null) return 'Not set'
+      return `${days} day${days !== 1 ? 's' : ''}`
     }
   }
 }

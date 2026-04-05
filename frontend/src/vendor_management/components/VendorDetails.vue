@@ -9,7 +9,19 @@
       </button>
     </div>
 
-    <div v-if="!vendor" class="empty-state">
+    <div v-if="loading" class="empty-state">
+      <div class="es-icon">⌛</div>
+      <div class="es-text">Loading vendor details</div>
+      <div class="es-sub">Fetching contact and product data</div>
+    </div>
+
+    <div v-else-if="error" class="empty-state">
+      <div class="es-icon">!</div>
+      <div class="es-text">Unable to load vendor</div>
+      <div class="es-sub">{{ error }}</div>
+    </div>
+
+    <div v-else-if="!vendor" class="empty-state">
       <div class="es-icon">📋</div>
       <div class="es-text">No vendor selected</div>
       <div class="es-sub">Click a vendor from the list to view details</div>
@@ -20,12 +32,14 @@
         <div class="vd-avatar">{{ initials }}</div>
         <div>
           <div class="vd-name">{{ vendor.name }}</div>
-          <div class="vd-id">{{ vendor.id }}</div>
+          <div class="vd-meta">
+            <span class="vd-id">{{ vendor.id }}</span>
+            <span v-if="vendor.prefix" class="vd-badge">{{ vendor.prefix }}</span>
+          </div>
         </div>
       </div>
 
       <div class="vd-sections">
-        <!-- Contact info -->
         <div class="vd-section">
           <div class="vd-section-title">Contact Information</div>
           <div class="vd-grid">
@@ -41,32 +55,41 @@
               <span class="fl">Location</span>
               <span class="vd-val">{{ vendor.location }}</span>
             </div>
+            <div class="fg">
+              <span class="fl">Vendor Prefix</span>
+              <span class="vd-val">{{ vendor.prefix || '—' }}</span>
+            </div>
           </div>
         </div>
 
-        <!-- Performance -->
         <div class="vd-section">
-          <div class="vd-section-title">Performance</div>
+          <div class="vd-section-title">Catalog Summary</div>
           <div class="vd-grid">
             <div class="fg">
               <span class="fl">Lead Time</span>
               <span class="vd-val vd-lead">
                 <span class="vd-lead-dot" :style="{ background: leadColor }"></span>
-                {{ vendor.leadTime }} day{{ vendor.leadTime !== 1 ? 's' : '' }}
+                {{ leadLabel }}
               </span>
+            </div>
+            <div class="fg">
+              <span class="fl">Products Mapped</span>
+              <span class="vd-val">{{ productLabels.length }}</span>
             </div>
           </div>
         </div>
 
-        <!-- Parts supplied -->
         <div class="vd-section">
-          <div class="vd-section-title">Parts Supplied</div>
-          <div class="vd-parts">
-            <span v-for="part in vendor.parts" :key="part" class="chip vd-part-chip">{{ part }}</span>
+          <div class="vd-section-title">Products Sold</div>
+          <div v-if="productLabels.length" class="vd-parts">
+            <span v-for="part in productLabels" :key="part" class="chip vd-part-chip">{{ part }}</span>
+          </div>
+          <div v-else class="vd-placeholder">
+            <span class="vd-placeholder-icon">📦</span>
+            <span class="vd-placeholder-text">No products are mapped to this vendor yet</span>
           </div>
         </div>
 
-        <!-- Placeholder sections -->
         <div class="vd-section">
           <div class="vd-section-title">Order History</div>
           <div class="vd-placeholder">
@@ -91,7 +114,9 @@
 export default {
   name: 'VendorDetails',
   props: {
-    vendor: { type: Object, default: null }
+    vendor: { type: Object, default: null },
+    loading: { type: Boolean, default: false },
+    error: { type: String, default: '' }
   },
   emits: ['back'],
   computed: {
@@ -104,8 +129,19 @@ export default {
         .toUpperCase()
         .slice(0, 2)
     },
+    productLabels() {
+      if (!this.vendor) return []
+      if (Array.isArray(this.vendor.products) && this.vendor.products.length) {
+        return this.vendor.products.map(product => product.name).filter(Boolean)
+      }
+      return Array.isArray(this.vendor.parts) ? this.vendor.parts : []
+    },
+    leadLabel() {
+      if (!this.vendor || this.vendor.leadTime == null) return 'Not set'
+      return `${this.vendor.leadTime} day${this.vendor.leadTime !== 1 ? 's' : ''}`
+    },
     leadColor() {
-      if (!this.vendor) return ''
+      if (!this.vendor || this.vendor.leadTime == null) return 'var(--border-2)'
       if (this.vendor.leadTime <= 3) return 'var(--green)'
       if (this.vendor.leadTime <= 7) return 'var(--amber)'
       return 'var(--red)'
@@ -169,11 +205,24 @@ export default {
   color: var(--ink);
   letter-spacing: -0.3px;
 }
+.vd-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 1px;
+}
 .vd-id {
   font-size: 11.5px;
   color: var(--ink-4);
   font-family: 'Geist Mono', monospace;
-  margin-top: 1px;
+}
+.vd-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blue-dim);
+  border-radius: 999px;
+  padding: 3px 8px;
 }
 
 .vd-sections {
@@ -207,9 +256,8 @@ export default {
   font-weight: 500;
   color: var(--ink);
 }
-
 .vd-lead {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
