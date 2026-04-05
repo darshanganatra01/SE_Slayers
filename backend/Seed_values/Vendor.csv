@@ -1,4 +1,4 @@
-﻿VID,VendorName,VendorPrefix,Location,Contact,Email
-1,Amul Engineering,AM,"Gondal Road, Rajkot",9428037277,amuleng009@gmail.com
-2,Khedut Enterprises,KE,"Veraval, Rajkot",9909026268,khedutenterprise@yahoo.com
-3,Shyam Industries,SI,"Ribda, Rajkot",9426460656,cs3001@se.study.iitm.ac.in
+﻿VID,VendorName,VendorPrefix,Location,Contact,Email,lead_time
+1,Amul Engineering,AM,"Gondal Road, Rajkot",9428037277,amuleng009@gmail.com,5
+2,Khedut Enterprises,KE,"Veraval, Rajkot",9909026268,khedutenterprise@yahoo.com,3
+3,Shyam Industries,SI,"Ribda, Rajkot",9426460656,cs3001@se.study.iitm.ac.in,7

@@ -30,11 +30,15 @@ def _format_decimal(value: Decimal | None) -> float:
     return float(value) if value is not None else 0.0
 
 
-def _build_spec_display(specs: dict | None) -> tuple[str, str]:
+def _spec_values(specs: dict | None) -> list[str]:
     if not isinstance(specs, dict) or not specs:
-        return "-", ""
+        return []
 
-    values = [str(value).strip() for value in specs.values() if str(value).strip()]
+    return [str(value).strip() for value in specs.values() if str(value).strip()]
+
+
+def _build_spec_display(specs: dict | None) -> tuple[str, str]:
+    values = _spec_values(specs)
     if not values:
         return "-", ""
 
@@ -42,6 +46,13 @@ def _build_spec_display(specs: dict | None) -> tuple[str, str]:
     detail_values = values[:-1]
     details = " · ".join(detail_values)
     return size, details
+
+
+def _build_spec_key(specs: dict | None) -> str:
+    size, details = _build_spec_display(specs)
+    if details:
+        return f"{size}\n{details}"
+    return size
 
 
 def _portfolio_chip_status(status: str) -> str:
@@ -80,13 +91,13 @@ def _build_portfolio_products() -> tuple[list[dict], dict[str, dict]]:
         if product_key not in grouped_products:
             grouped_products[product_key] = {
                 "name": row.pname,
-                "code": row.category or "",
+                "category": row.category or "",
                 "key": product_key,
                 "sizes": [],
             }
             detail_map[product_key] = {
                 "title": row.pname,
-                "sku": row.category or "",
+                "category": row.category or "",
                 "rows": [],
                 "_size_index": {},
             }
@@ -96,14 +107,22 @@ def _build_portfolio_products() -> tuple[list[dict], dict[str, dict]]:
 
         status = _stock_status(row.stock_qty, row.threshold)
         size, spec = _build_spec_display(row.specs)
+        spec_key = _build_spec_key(row.specs)
         chip_status = _portfolio_chip_status(status)
 
         chip_index = next(
-            (index for index, item in enumerate(grouped_products[product_key]["sizes"]) if item["label"] == size),
+            (index for index, item in enumerate(grouped_products[product_key]["sizes"]) if item["key"] == spec_key),
             None,
         )
         if chip_index is None:
-            grouped_products[product_key]["sizes"].append({"label": size, "status": chip_status})
+            grouped_products[product_key]["sizes"].append(
+                {
+                    "key": spec_key,
+                    "label": size,
+                    "detail": spec,
+                    "status": chip_status,
+                }
+            )
         else:
             existing = grouped_products[product_key]["sizes"][chip_index]["status"]
             if _status_rank(status) > _status_rank("instock" if existing == "ok" else existing):
@@ -111,9 +130,10 @@ def _build_portfolio_products() -> tuple[list[dict], dict[str, dict]]:
 
         popup_data = detail_map[product_key]
         size_index = popup_data["_size_index"]
-        if size not in size_index:
+        if spec_key not in size_index:
             popup_data["rows"].append(
                 {
+                    "key": spec_key,
                     "size": size,
                     "dim": spec,
                     "stock": row.stock_qty or 0,
@@ -121,9 +141,9 @@ def _build_portfolio_products() -> tuple[list[dict], dict[str, dict]]:
                     "status": chip_status,
                 }
             )
-            size_index[size] = len(popup_data["rows"]) - 1
+            size_index[spec_key] = len(popup_data["rows"]) - 1
         else:
-            detail_row = popup_data["rows"][size_index[size]]
+            detail_row = popup_data["rows"][size_index[spec_key]]
             detail_row["stock"] += row.stock_qty or 0
             detail_row["maxStock"] += row.threshold or 0
             if _status_rank(status) > _status_rank("instock" if detail_row["status"] == "ok" else detail_row["status"]):

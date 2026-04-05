@@ -46,6 +46,13 @@
           </svg>
           Inventory
         </router-link>
+
+        <router-link to="/ai-feature" class="nav-link">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M7 1v12M1 7h12m-6-6a5 5 0 110 10 5 5 0 010-10z"/>
+          </svg>
+          Rate Updater
+        </router-link>
       </div>
 
 

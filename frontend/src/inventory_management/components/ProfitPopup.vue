@@ -2,18 +2,18 @@
   <div v-if="visible" class="ovl" @click.self="$emit('close')">
     <div class="pop">
       <div class="pop-h">
-        <div>
-          <div class="pop-title">{{ data.title }}</div>
-          <div class="pop-sub">Stock levels by size · tap to view vendor procurement</div>
-        </div>
+          <div>
+            <div class="pop-title">{{ data.title }}</div>
+            <div class="pop-sub">{{ data.category ? `${data.category} · ` : '' }}Stock levels by specification</div>
+          </div>
         <button class="pop-x" @click="$emit('close')">×</button>
       </div>
       <div class="pop-b">
         <div
           v-for="(r, i) in data.rows"
-          :key="i"
+          :key="r.key || i"
           class="pop-row"
-          @click="$emit('go-vendor', data.sku, r.size)"
+          @click="openVendorCompare(r)"
         >
           <div class="pop-size-col">
             <div class="pop-size">{{ r.size }}</div>
@@ -38,10 +38,7 @@
           <div class="pop-total-lbl">Total stock</div>
           <div class="pop-total-val">{{ totalStock }} units</div>
         </div>
-        <button class="btn-vendor" @click="$emit('go-vendor', data.sku, 'all'); $emit('close')">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-          View all vendors for this product
-        </button>
+        <div class="pop-footer-note">Select a specification to see the vendors</div>
       </div>
     </div>
   </div>
@@ -54,7 +51,7 @@ export default {
     visible: { type: Boolean, default: false },
     data: {
       type: Object,
-      default: () => ({ title: '', sku: '', rows: [] })
+      default: () => ({ title: '', category: '', rows: [] })
     }
   },
   emits: ['close', 'go-vendor'],
@@ -64,6 +61,19 @@ export default {
     }
   },
   methods: {
+    openVendorCompare(r) {
+      this.$emit('go-vendor', {
+        source: 'portfolio',
+        partId: this.data.key,
+        specKey: r.key || this.rowLabel(r),
+        specLabel: this.rowLabel(r)
+      })
+      this.$emit('close')
+    },
+    rowLabel(r) {
+      if (r.dim) return `${r.size} · ${r.dim}`
+      return r.size
+    },
     badgeClass(s) {
       if (s === 'ok')  return 'badge-green'
       if (s === 'low') return 'badge-amber'
@@ -102,14 +112,18 @@ export default {
   background: var(--white);
   border-radius: 10px;
   width: 480px; max-width: 94vw;
+  max-height: 82vh;
   box-shadow: 0 8px 32px rgba(0,0,0,0.12);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .pop-h {
   padding: 16px 18px 14px;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: flex-start;
   justify-content: space-between; gap: 12px;
+  flex-shrink: 0;
 }
 .pop-title { font-size: 14px; font-weight: 600; }
 .pop-sub   { font-size: 12px; color: var(--ink-4); margin-top: 2px; }
@@ -123,7 +137,11 @@ export default {
 }
 .pop-x:hover { background: var(--border); }
 
-.pop-b { padding: 0; }
+.pop-b {
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
 .pop-row {
   display: grid;
   grid-template-columns: 120px 90px 1fr 20px;
@@ -170,17 +188,13 @@ export default {
   padding: 12px 18px;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .pop-total-lbl { font-size: 12px; color: var(--ink-3); font-weight: 500; }
 .pop-total-val { font-size: 14px; font-weight: 600; }
-
-.btn-vendor {
-  background: var(--blue-dim); color: var(--blue);
-  border: 1px solid #bfdbfe; border-radius: 6px;
-  padding: 5px 12px;
-  font-family: 'Geist', sans-serif; font-size: 12.5px; font-weight: 500;
-  cursor: pointer; display: flex; align-items: center; gap: 5px;
+.pop-footer-note {
+  font-size: 12px;
+  color: var(--ink-4);
+  font-weight: 500;
 }
-.btn-vendor:hover { background: #dbeafe; }
-.btn-vendor svg { width: 12px; height: 12px; }
 </style>

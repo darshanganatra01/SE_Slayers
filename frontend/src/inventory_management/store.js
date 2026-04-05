@@ -1,6 +1,23 @@
 import { defineStore } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 
+const normalizePendingOrder = (procurement = {}) => {
+  const vendor = procurement.vendor || {}
+  const status = String(procurement.status || '').trim().toLowerCase()
+
+  const vendorName = vendor.name || procurement.vendorName || ''
+  const specification = procurement.specification || procurement.size || '—'
+
+  return {
+    id: String(procurement.id ?? ''),
+    procurementId: String(procurement.id ?? ''),
+    name: procurement.partName || 'Unknown Part',
+    detail: vendorName ? `${specification} · ${vendorName}` : specification,
+    qty: Number(procurement.orderedQty ?? 0) || 0,
+    status
+  }
+}
+
 export const useInventoryStore = defineStore('inventory', {
   state: () => ({
     parts: [],
@@ -20,6 +37,7 @@ export const useInventoryStore = defineStore('inventory', {
     outOfStockCount: (s) => s.parts.filter((p) => p.status === 'out').length,
     lowOnlyCount: (s) => s.parts.filter((p) => p.status === 'low').length,
     inventoryValue: (s) => s.parts.reduce((total, part) => total + (Number(part.sellPrice || 0) * Number(part.stock || 0)), 0),
+    categories: (s) => [...new Set(s.parts.map((part) => (part.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
   },
 
   actions: {
@@ -30,19 +48,35 @@ export const useInventoryStore = defineStore('inventory', {
       this.asOfDate = ''
       this.portfolioProducts = []
       this.profData = {}
+      this.pendingOrders = []
 
       try {
         const authStore = useAuthStore()
-        const payload = await authStore.authenticatedRequest('/api/inventory/overview')
+        const [overviewResult, procurementResult] = await Promise.allSettled([
+          authStore.authenticatedRequest('/api/inventory/overview'),
+          authStore.authenticatedRequest('/api/vendors/procurements')
+        ])
+
+        if (overviewResult.status !== 'fulfilled') {
+          throw overviewResult.reason
+        }
+
+        const payload = overviewResult.value
         this.parts = payload.parts || []
         this.asOfDate = payload.summary?.asOfDate || ''
         this.portfolioProducts = payload.portfolioProducts || []
         this.profData = payload.portfolioDetails || {}
+
+        if (procurementResult.status === 'fulfilled') {
+          this.pendingOrders = (procurementResult.value.procurements || [])
+            .map(normalizePendingOrder)
+        }
       } catch (error) {
         this.parts = []
         this.asOfDate = ''
         this.portfolioProducts = []
         this.profData = {}
+        this.pendingOrders = []
         this.error = error.message || 'Unable to load inventory right now.'
       } finally {
         this.isLoading = false

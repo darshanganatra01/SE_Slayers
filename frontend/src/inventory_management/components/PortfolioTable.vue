@@ -8,7 +8,7 @@
       <thead>
         <tr>
           <th>Product name</th>
-          <th>Sizes</th>
+          <th>Size &amp; Specifications</th>
         </tr>
       </thead>
       <tbody>
@@ -20,16 +20,19 @@
         >
           <td>
             <div class="pn">{{ prod.name }}</div>
-            <div class="pc">{{ prod.code }}</div>
+            <div class="pc">{{ prod.category }}</div>
           </td>
           <td>
             <div v-if="prod.sizes.length" class="size-chips">
               <span
                 v-for="(sz, idx) in prod.sizes"
-                :key="idx"
+                :key="sz.key || idx"
                 class="sc"
                 :class="chipClass(sz.status)"
-              >{{ sz.label }}</span>
+              >
+                <span class="sc-main">{{ sz.label }}</span>
+                <span v-if="sz.detail" class="sc-sub">{{ sz.detail }}</span>
+              </span>
             </div>
             <div v-else class="empty-size">No sizes available yet</div>
           </td>
@@ -96,8 +99,24 @@ tr:last-child td { border-bottom: none; }
   color: var(--ink-4);
 }
 .sc {
-  font-size: 11px; border-radius: 4px;
-  padding: 2px 7px; font-weight: 500; border: 1px solid;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-weight: 500;
+  border: 1px solid;
+  white-space: normal;
+  line-height: 1.25;
+}
+.sc-main {
+  font-weight: 600;
+}
+.sc-sub {
+  font-size: 10px;
+  opacity: 0.95;
 }
 .sc-ok  { background: var(--green-dim); color: var(--green); border-color: #bbf7d0; }
 .sc-low { background: var(--amber-dim); color: #92400e; border-color: #fde68a; }
