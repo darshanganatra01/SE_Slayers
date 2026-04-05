@@ -1,0 +1,18 @@
+﻿python : 
+C:\Python314\python.exe: 
+No module named pytest
+At line:1 char:1
++ python -m pytest tests/te
+st_internal_customers_api.p
+y -v --tb=long 2> ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (C:\  
+  Python314\py...le name   
+ d pytest:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
