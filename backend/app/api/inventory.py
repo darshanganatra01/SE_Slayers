@@ -80,13 +80,13 @@ def _build_portfolio_products() -> tuple[list[dict], dict[str, dict]]:
         if product_key not in grouped_products:
             grouped_products[product_key] = {
                 "name": row.pname,
-                "code": row.category or "",
+                "category": row.category or "",
                 "key": product_key,
                 "sizes": [],
             }
             detail_map[product_key] = {
                 "title": row.pname,
-                "sku": row.category or "",
+                "category": row.category or "",
                 "rows": [],
                 "_size_index": {},
             }

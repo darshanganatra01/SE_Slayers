@@ -1,6 +1,16 @@
 <template>
   <div class="part-list">
     <div class="pl-header">Parts Catalog</div>
+    <div v-if="loading" class="pl-state">
+      <div class="es-icon">⌛</div>
+      <div class="es-text">Loading parts catalog</div>
+      <div class="es-sub">Fetching products and available sizes</div>
+    </div>
+    <div v-else-if="error" class="pl-state">
+      <div class="es-icon">!</div>
+      <div class="es-text">Unable to load parts</div>
+      <div class="es-sub">{{ error }}</div>
+    </div>
     <div class="pl-cards">
       <PartCard
         v-for="part in parts"
@@ -20,6 +30,8 @@ export default {
   name: 'PartList',
   components: { PartCard },
   props: {
+    loading:        { type: Boolean, default: false },
+    error:          { type: String, default: '' },
     parts:          { type: Array, default: () => [] },
     selectedPartId: { type: String, default: null }
   },
@@ -54,5 +66,9 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.pl-state {
+  padding: 18px 14px 6px;
+  border-bottom: 1.5px solid var(--border-2);
 }
 </style>

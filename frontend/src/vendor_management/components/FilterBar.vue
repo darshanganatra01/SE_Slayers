@@ -1,6 +1,11 @@
 <template>
   <div class="filter-bar">
-    <select class="tb-select" :value="leadTime" @change="$emit('update:leadTime', $event.target.value)">
+    <select
+      v-if="showLeadTime"
+      class="tb-select"
+      :value="leadTime"
+      @change="$emit('update:leadTime', $event.target.value)"
+    >
       <option value="all">All Lead Times</option>
       <option value="fast">≤ 3 days</option>
       <option value="medium">4–7 days</option>
@@ -19,6 +24,7 @@
 export default {
   name: 'FilterBar',
   props: {
+    showLeadTime: { type: Boolean, default: true },
     leadTime:  { type: String, default: 'all' },
     location:  { type: String, default: 'all' },
     locations: { type: Array, default: () => [] }

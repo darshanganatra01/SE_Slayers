@@ -20,6 +20,7 @@ export const useInventoryStore = defineStore('inventory', {
     outOfStockCount: (s) => s.parts.filter((p) => p.status === 'out').length,
     lowOnlyCount: (s) => s.parts.filter((p) => p.status === 'low').length,
     inventoryValue: (s) => s.parts.reduce((total, part) => total + (Number(part.sellPrice || 0) * Number(part.stock || 0)), 0),
+    categories: (s) => [...new Set(s.parts.map((part) => (part.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
   },
 
   actions: {

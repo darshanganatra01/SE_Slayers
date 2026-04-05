@@ -51,7 +51,9 @@ def test_login_accepts_customer_and_preserves_customer_profile(client, app):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["user"]["role"] == "customer"
+    assert payload["user"]["customer"]["cid"]
     assert payload["user"]["customer"]["email"] == "customer@example.com"
+    assert payload["user"]["customer"]["contact"] == "9999999999"
 
 
 def test_login_rejects_invalid_password_with_generic_message(client, app):
@@ -160,6 +162,7 @@ def test_me_returns_current_user_for_valid_token(client, app):
 
     assert response.status_code == 200
     assert response.get_json()["user"]["email"] == "customer@example.com"
+    assert response.get_json()["user"]["customer"]["cid"]
 
 
 def test_me_requires_bearer_token(client):

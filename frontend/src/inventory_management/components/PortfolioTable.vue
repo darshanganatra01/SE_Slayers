@@ -20,7 +20,7 @@
         >
           <td>
             <div class="pn">{{ prod.name }}</div>
-            <div class="pc">{{ prod.code }}</div>
+            <div class="pc">{{ prod.category }}</div>
           </td>
           <td>
             <div v-if="prod.sizes.length" class="size-chips">

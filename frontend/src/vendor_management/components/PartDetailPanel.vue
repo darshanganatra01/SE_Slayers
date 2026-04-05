@@ -8,21 +8,23 @@
     </div>
 
     <template v-else>
-      <!-- Header -->
       <div class="pd-header">
         <div class="pd-title">{{ part.name }}</div>
         <div class="pd-sub" v-if="!selectedSize">Select a size to view vendor options</div>
         <div class="pd-sub" v-else>
           <span class="pd-sub-size">{{ selectedSize }}</span>
-          — select a vendor below to proceed
+          · select a vendor below to proceed
         </div>
       </div>
 
       <div class="pd-body">
-        <!-- Left column: image + sizes -->
         <div class="pd-left">
           <div class="pd-image-wrap">
-            <img :src="part.image" :alt="part.name" class="pd-image" />
+            <img v-if="part.image" :src="part.image" :alt="part.name" class="pd-image" />
+            <div v-else class="pd-image-placeholder">
+              <div class="pd-image-icon">IMG</div>
+              <div class="pd-image-text">Product image placeholder</div>
+            </div>
           </div>
 
           <div class="pd-sizes-section">
@@ -47,7 +49,6 @@
           </div>
         </div>
 
-        <!-- Right column: vendor comparison (shown after size selected) -->
         <div class="pd-right" :class="{ visible: !!selectedSize }">
           <div v-if="!selectedSize" class="pd-vendor-empty">
             <div class="pve-icon">🏪</div>
@@ -77,18 +78,14 @@
                 <div class="pv-details">
                   <div class="pv-detail">
                     <span class="pvd-label">Price</span>
-                    <span class="pvd-value">₹{{ v.price }}</span>
+                    <span class="pvd-value">{{ priceLabel(v.price) }}</span>
                   </div>
                   <div class="pv-detail">
                     <span class="pvd-label">Lead Time</span>
                     <span class="pvd-value pv-lead">
                       <span class="pv-dot" :style="{ background: leadColor(v.leadTime) }"></span>
-                      {{ v.leadTime }}d
+                      {{ leadLabel(v.leadTime) }}
                     </span>
-                  </div>
-                  <div class="pv-detail">
-                    <span class="pvd-label">Last Purchased</span>
-                    <span class="pvd-value pvd-date">{{ v.lastPurchased }}</span>
                   </div>
                 </div>
                 <div v-if="selectedVendorId === v.vendorId" class="pv-selected-mark">
@@ -121,8 +118,7 @@
 export default {
   name: 'PartDetailPanel',
   props: {
-    part:    { type: Object, default: null },
-    vendors: { type: Array,  default: () => [] }
+    part: { type: Object, default: null }
   },
   emits: ['select-vendor'],
   data() {
@@ -142,14 +138,12 @@ export default {
   computed: {
     currentVendors() {
       if (!this.selectedSizeObj) return []
-      return this.selectedSizeObj.suppliers.map(s => ({
-        ...s,
-        vendor: this.vendors.find(v => v.id === s.vendorId) || null
-      }))
+      return this.selectedSizeObj.suppliers
     },
     bestPriceId() {
-      if (!this.currentVendors.length) return null
-      return this.currentVendors.reduce((min, v) => v.price < min.price ? v : min).vendorId
+      const pricedVendors = this.currentVendors.filter(v => typeof v.price === 'number')
+      if (!pricedVendors.length) return null
+      return pricedVendors.reduce((min, v) => v.price < min.price ? v : min).vendorId
     }
   },
   methods: {
@@ -159,9 +153,18 @@ export default {
       this.selectedVendorId = null
     },
     leadColor(days) {
+      if (days == null) return 'var(--border-2)'
       if (days <= 3) return 'var(--green)'
       if (days <= 7) return 'var(--amber)'
       return 'var(--red)'
+    },
+    leadLabel(days) {
+      if (days == null) return 'Not set'
+      return `${days}d`
+    },
+    priceLabel(price) {
+      if (typeof price !== 'number') return '—'
+      return `₹${price.toLocaleString('en-IN')}`
     },
     confirmVendor() {
       const v = this.currentVendors.find(v => v.vendorId === this.selectedVendorId)
@@ -233,6 +236,30 @@ export default {
   height: 160px;
   object-fit: contain;
   border-radius: 4px;
+}
+.pd-image-placeholder {
+  width: 130px;
+  height: 160px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px dashed var(--border-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.pd-image-icon {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink-4);
+  letter-spacing: 1px;
+}
+.pd-image-text {
+  font-size: 11px;
+  color: var(--ink-4);
+  text-align: center;
+  max-width: 90px;
 }
 
 .pd-sizes-label {
@@ -336,8 +363,6 @@ export default {
 .pvd-value  { font-size: 13px; font-weight: 600; color: var(--ink); font-family: 'Geist Mono', monospace; }
 .pv-lead    { display: flex; align-items: center; gap: 4px; font-family: 'Geist', sans-serif; font-weight: 500; }
 .pv-dot     { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.pvd-date   { font-size: 11px; font-weight: 500; color: var(--ink-3); }
-
 .pv-selected-mark {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 10px; font-weight: 600; color: var(--blue); margin-top: 7px;

@@ -94,11 +94,11 @@ def auth_required(*roles: str):
 
 
 def serialize_user(user: User) -> dict:
-    customer = None
+    customer_payload = None
     if user.is_customer:
         customer_row = Customer.query.filter_by(uid=user.uid).first()
         if customer_row is not None:
-            customer = {
+            customer_payload = {
                 "cid": customer_row.cid,
                 "customer_name": customer_row.customer_name,
                 "email": customer_row.email,
@@ -113,7 +113,7 @@ def serialize_user(user: User) -> dict:
         "email": user.email,
         "role": user.role,
         "is_active": user.is_active,
-        "customer": customer,
+        "customer": customer_payload,
     }
 
 
