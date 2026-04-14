@@ -239,43 +239,89 @@ export default {
     downloadInvoice(order) {
       const lines = order.items.map(it =>
         `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7">${it.name}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e4e4e7;text-align:center">${it.qty || 1}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:40px;height:40px;background:#eff6ff;color:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;">📦</div>
+              <div>
+                <div style="font-weight:600;color:#0f172a;">${it.name}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">${it.specs || 'Standard Packaging'}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div style="text-align:center; padding:6px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-weight:600; color:#0f172a;">
+              ${it.qty || 1}
+            </div>
+          </td>
         </tr>`
       ).join('')
 
       const html = `<!DOCTYPE html>
-    <html><head><meta charset="UTF-8"/>
-    <style>
-      body { font-family: sans-serif; color: #09090b; padding: 40px; max-width: 600px; margin: auto; }
-      h1   { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-      .meta { font-size: 12px; color: #71717a; margin-bottom: 24px; }
-      .section { margin-bottom: 20px; }
-      .label { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #a1a1aa; margin-bottom: 6px; }
-      .val { font-size: 14px; font-weight: 500; }
-      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-      th { padding: 8px 12px; background: #f7f7f8; font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #a1a1aa; text-align: left; border-bottom: 1.5px solid #e4e4e7; }
-      .total { text-align: right; margin-top: 16px; font-size: 16px; font-weight: 700; }
-    </style>
-    </head><body>
-      <h1>Invoice</h1>
-      <div class="meta">${order.id} · Generated ${new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}</div>
-      <div class="section">
-        <div class="label">Bill To</div>
-        <div class="val">${order.customer}</div>
-        <div style="font-size:12px;color:#71717a">${order.shop}</div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #e2e8f0; padding: 40px 20px; margin: 0; -webkit-font-smoothing: antialiased; }
+    .card { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.05); overflow: hidden; }
+    .head { background: #0f172a; color: #fff; padding: 40px; display: flex; justify-content: space-between; align-items: center; }
+    .head h1 { font-size: 28px; margin: 0; font-weight: 700; letter-spacing: -0.5px; }
+    .head p { margin: 4px 0 0; color: #94a3b8; font-size: 14px; }
+    .badge { display: inline-block; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; border: 1px solid rgba(255,255,255,0.2); }
+    .body { padding: 40px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 40px; }
+    .block h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; margin: 0 0 12px 0; }
+    .block p { margin: 0 0 6px 0; font-size: 14px; line-height: 1.5; color:#0f172a;}
+    .block .prim { font-weight: 600; font-size: 16px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 32px; }
+    th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 16px 20px; text-align: left; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+    th:first-child { border-radius: 8px 0 0 8px; border-left: 1px solid #e2e8f0; }
+    th:last-child { border-radius: 0 8px 8px 0; text-align: center; border-right: 1px solid #e2e8f0; width: 100px; }
+    td { padding: 20px; border-bottom: 1px solid #e2e8f0; }
+    .tot-box { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 12px; padding: 24px; display: flex; justify-content: space-between; align-items: center; margin-left: auto; max-width: 320px; }
+    .tot-box span { font-size: 14px; color: #2563eb; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+    .tot-box strong { font-size: 28px; color: #2563eb; font-weight: 700; }
+    .foot { text-align: center; padding-top: 32px; border-top: 1px dashed #e2e8f0; color: #64748b; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div>
+        <h1>Invoice</h1>
+        <p>${order.id} • Generated ${new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</p>
       </div>
-      <div class="section">
-        <div class="label">Order Details</div>
-        <div class="val">Placed on: ${order.placedOn}</div>
-        <div style="font-size:12px;color:#71717a;margin-top:2px">Status: ${order.status}</div>
+      <div><div class="badge">${order.status}</div></div>
+    </div>
+    <div class="body">
+      <div class="grid">
+        <div class="block">
+          <h3>Billed To</h3>
+          <p class="prim">${order.customer}</p>
+          <p style="color:#64748b">${order.shop}</p>
+        </div>
+        <div class="block">
+          <h3>Order Details</h3>
+          <p><span style="color:#64748b;display:inline-block;width:80px;">Date:</span> ${order.placedOn}</p>
+          <p><span style="color:#64748b;display:inline-block;width:80px;">Priority:</span> ${order.priority || 'Standard'}</p>
+          <p><span style="color:#64748b;display:inline-block;width:80px;">Carrier:</span> ${order.transport || '—'}</p>
+        </div>
       </div>
       <table>
-        <thead><tr><th>Item</th><th style="text-align:center">Qty</th></tr></thead>
+        <thead><tr><th>Description</th><th>Quantity</th></tr></thead>
         <tbody>${lines}</tbody>
       </table>
-      <div class="total">Total: ${order.value}</div>
-    </body></html>`
+      <div class="tot-box">
+        <span>Total Amount</span>
+        <strong>${order.value}</strong>
+      </div>
+      <div class="foot">Thank you for your business!</div>
+    </div>
+  </div>
+</body>
+</html>`
 
       const blob = new Blob([html], { type: 'text/html' })
       const url  = URL.createObjectURL(blob)

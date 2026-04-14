@@ -30,3 +30,8 @@ from app.models.delivery_receipt import (                             # noqa
     DeliveryReceipt,
     DeliveryReceiptDetail,
 )
+from app.models.order_board_ranking import (                          # noqa
+    HighPriorityRanking,
+    MediumPriorityRanking,
+    LowPriorityRanking,
+)

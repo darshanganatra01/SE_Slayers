@@ -20,7 +20,7 @@ export const useOrderStore = defineStore('orders', {
     byStatus: (state) => (status) => {
       // Access orders deeply so Pinia tracks nested changes
       state.orders.forEach(o => o.items.forEach(it => it.qty))
-      return state.orders.filter(o => o.status === status).sort((a, b) => a.order - b.order)
+      return state.orders.filter(o => o.status === status).sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999) || a.order - b.order)
     },
 
     inprocessCount: (state) =>
@@ -40,13 +40,10 @@ export const useOrderStore = defineStore('orders', {
         if (!res.ok) throw new Error('Failed to fetch orders');
         const data = await res.json();
         let fetchedOrders = data.orders || [];
-        fetchedOrders.sort((a, b) => {
-          const limitA = new Date(a.placedOn || 0)
-          const limitB = new Date(b.placedOn || 0)
-          return limitA - limitB
-        })
         fetchedOrders.forEach((o, i) => {
           if (typeof o.order === 'undefined' || isNaN(o.order)) o.order = i
+          // rank comes from server (persisted ranking), default 9999 = unranked
+          if (typeof o.rank === 'undefined') o.rank = 9999
         })
         this.orders = fetchedOrders;
         this.inventory = data.inventory || {};
@@ -106,31 +103,46 @@ export const useOrderStore = defineStore('orders', {
       }
     },
 
-    reorder(fromId, toId, pos, targetPriority) {
-      const from = this.orders.find(o => o.id === fromId)
-      const to   = toId ? this.orders.find(o => o.id === toId) : null
-      
-      if (!from) return
-
-      if (!to && targetPriority) {
-        if (from.priority === targetPriority) return
-        from.priority = targetPriority
-        const currentList = this.orders.filter(o => o.status === from.status).sort((a, b) => a.order - b.order)
-        from.order = currentList.length ? currentList[currentList.length - 1].order + 1 : 0
-        return
+    async reorderColumn(status, priority, orderedCards) {
+      // Optimistic: update ranks locally
+      orderedCards.forEach((card, i) => { card.rank = i })
+      const ordered_coids = orderedCards.map(c => c.id)
+      try {
+        const res = await fetch('/api/internal-portal/reorder-cards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, priority, ordered_coids })
+        })
+        if (!res.ok) throw new Error('Reorder failed')
+        return true
+      } catch (e) {
+        console.error('Reorder failed:', e)
+        this.error = e.message
+        await this.fetchOrders()
+        return false
       }
+    },
 
-      if (!to || from.status !== to.status) return
-      
-      from.priority = to.priority
-      let col = this.orders
-        .filter(o => o.status === from.status)
-        .sort((a, b) => a.order - b.order)
-        .filter(o => o.id !== fromId)
-        
-      const ti = col.findIndex(o => o.id === toId)
-      col.splice(pos === 'before' ? ti : ti + 1, 0, from)
-      col.forEach((o, i) => { o.order = i })
+    async crossDrag(coid, status, fromPriority, toPriority, toRank) {
+      // Optimistic: update the card locally
+      const card = this.orders.find(o => o.id === coid)
+      if (card) card.priority = toPriority
+      try {
+        const res = await fetch('/api/internal-portal/cross-drag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ coid, status, from_priority: fromPriority, to_priority: toPriority, to_rank: toRank })
+        })
+        if (!res.ok) throw new Error('Cross-drag failed')
+        // Refetch to get re-ranked data from server
+        await this.fetchOrders()
+        return true
+      } catch (e) {
+        console.error('Cross-drag failed:', e)
+        this.error = e.message
+        await this.fetchOrders()
+        return false
+      }
     },
 
     addOrder(formData) {
