@@ -47,6 +47,13 @@
           Inventory
         </router-link>
 
+        <router-link to="/demand-forecast" class="nav-link">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M1 11l4-4 3 3 5-5M13 5h-3v3"/>
+          </svg>
+          Demand Forecast
+        </router-link>
+
         <router-link to="/ai-feature" class="nav-link">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M7 1v12M1 7h12m-6-6a5 5 0 110 10 5 5 0 010-10z"/>
