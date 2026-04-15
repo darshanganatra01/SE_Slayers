@@ -22,7 +22,7 @@
         <div class="stat-card urgent">
           <div class="stat-label">Restock Alerts</div>
           <div class="stat-val">{{ restockAlertCount }}</div>
-          <div class="stat-sub">Stockout within 14 days</div>
+          <div class="stat-sub">Stockout within 7 days</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Avg. Daily Predicted Demand</div>
@@ -41,24 +41,30 @@
         <table class="forecast-table">
           <thead>
             <tr>
-              <th>Product / SKU</th>
+              <th>SKU ID</th>
+              <th>Product</th>
               <th>Category</th>
-              <th>14-Day Demand</th>
+              <th>Vendor LT (Days)</th>
+              <th>7-Day Demand</th>
               <th>Current Stock</th>
               <th>Days to Stockout</th>
               <th>Status</th>
-              <th>Trend (30d Hist + 14d Pred)</th>
+              <th>Trend (30d Hist + 7d Pred)</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in forecasts" :key="item.skuid" :class="{ 'row-urgent': item.restock_alert }">
+              <td class="num-cell">
+                <div class="prod-sku">{{ item.skuid }}</div>
+              </td>
               <td>
                 <div class="prod-name">{{ item.product_name }}</div>
-                <div class="prod-sku">SKU: {{ item.skuid }}</div>
+                <div class="prod-sub">{{ item.specs }}</div>
               </td>
               <td><span class="badge">{{ item.category }}</span></td>
+              <td class="num-cell" style="font-family: monospace; color: var(--ink-3);">{{ item.lead_time_display }}</td>
               <td class="num-cell">
-                <div class="pred-qty">~{{ item.total_predicted_14d }}</div>
+                <div class="pred-qty">~{{ item.total_predicted_7d }}</div>
                 <div class="pred-sub">{{ item.avg_daily_predicted }}/day</div>
               </td>
               <td class="num-cell">
@@ -78,11 +84,11 @@
               <td class="chart-cell">
                 <div class="sparkline">
                   <div
-                    v-for="(dp, idx) in combinedSeries(item)"
+                    v-for="(dp, idx) in item._combined"
                     :key="idx"
                     class="spark-bar"
                     :class="{ 'is-pred': idx >= 30 }"
-                    :style="{ height: (dp.qty / maxQty(item) * 100) + '%' }"
+                    :style="{ height: ((item._maxQty > 0 ? dp.qty / item._maxQty : 0) * 100) + '%' }"
                     :title="`${dp.date}: ${dp.qty} units`"
                   ></div>
                 </div>
@@ -106,7 +112,7 @@ const generatedAt = ref(null)
 const headMeta = computed(() => {
   if (!generatedAt.value) return 'Initializing model...'
   const date = new Date(generatedAt.value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-  return `Forecast generated at ${date} · 14-day horizon`
+  return `Forecast generated at ${date} · 7-day horizon`
 })
 
 const restockAlertCount = computed(() => forecasts.value.filter(f => f.restock_alert).length)
@@ -126,7 +132,15 @@ const fetchForecast = async () => {
     })
     const data = await res.json()
     if (data.forecasts) {
-      forecasts.value = data.forecasts
+      forecasts.value = data.forecasts.map(item => {
+        const _combined = [...item.historical, ...item.predicted]
+        const maxQ = Math.max(..._combined.map(d => d.qty), 1)
+        return {
+          ...item,
+          _combined,
+          _maxQty: maxQ
+        }
+      })
       generatedAt.value = data.generated_at
     }
   } catch (err) {
@@ -136,18 +150,9 @@ const fetchForecast = async () => {
   }
 }
 
-const combinedSeries = (item) => {
-  return [...item.historical, ...item.predicted]
-}
-
-const maxQty = (item) => {
-  const all = combinedSeries(item).map(d => d.qty)
-  return Math.max(...all, 1)
-}
-
 const getStockoutClass = (days) => {
-  if (days <= 7) return 'text-red'
-  if (days <= 14) return 'text-orange'
+  if (days <= 3) return 'text-red'
+  if (days <= 7) return 'text-orange'
   return ''
 }
 
@@ -161,7 +166,7 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  height: 100vh;
   overflow: hidden;
   background: var(--bg);
 }
@@ -170,8 +175,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow-y: auto;
-  min-height: 0;
+  overflow: hidden;
   padding: 18px 20px 28px;
 }
 
@@ -195,17 +199,29 @@ onMounted(() => {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.table-container { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+.table-container { 
+  background: var(--surface); 
+  border: 1.5px solid var(--border); 
+  border-radius: 10px; 
+  overflow: auto; 
+  flex: 1; 
+  min-height: 0; 
+}
 .forecast-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .forecast-table th {
-  text-align: left; background: #fafafa; padding: 10px 14px; border-bottom: 1.5px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  text-align: left; background: #fafafa; padding: 10px 14px;
   color: var(--ink-3); font-weight: 500; font-size: 11px; text-transform: uppercase;
+  box-shadow: 0 1.5px 0 var(--border);
 }
 .forecast-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--ink); vertical-align: middle; }
 .forecast-table tr:last-child td { border-bottom: none; }
 .forecast-table tr.row-urgent { background: #fffefe; }
 
 .prod-name { font-weight: 500; margin-bottom: 2px; }
+.prod-sub { font-size: 11px; color: var(--ink-4); }
 .prod-sku { font-size: 11px; color: var(--ink-4); font-family: 'Geist Mono', monospace; }
 
 .badge {

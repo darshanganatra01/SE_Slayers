@@ -413,8 +413,16 @@ class CustomerOrders(Resource):
                 db.session.add(order_detail)
                 
             new_order.total_amount = total_order_amount
-            
             db.session.commit()
+            
+            # TRIGGER ASYNC THRESHOLD RECALCULATION
+            import threading
+            from flask import current_app
+            from app.api.demand_forecast import update_all_sku_thresholds
+            
+            app_obj = current_app._get_current_object()
+            threading.Thread(target=update_all_sku_thresholds, args=(app_obj,)).start()
+            
             return {"message": "Order placed successfully", "order_id": order_id}, 201
             
         except Exception as e:
