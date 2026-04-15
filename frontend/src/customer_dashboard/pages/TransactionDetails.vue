@@ -8,15 +8,13 @@
     <div v-else-if="!orderData" class="container py-10 text-center text-muted-foreground">Order not found.</div>
 
     <template v-else>
-      <h1 class="mb-1 text-2xl font-bold text-foreground">Order #{{ orderData.order.coId }}</h1>
+      <div class="flex items-center justify-between mb-1">
+        <h1 class="text-2xl font-bold text-foreground">Order #{{ orderData.order.coId }}</h1>
+        <Badge :variant="orderData.order.status === 'Fulfilled' ? 'default' : (orderData.order.status === 'Partially Fulfilled' ? 'secondary' : 'outline')">
+          {{ orderData.order.status }}
+        </Badge>
+      </div>
       <p class="mb-6 text-sm text-muted-foreground">Placed on {{ orderData.order.orderDate }}</p>
-
-      <Card class="mb-6">
-        <CardHeader><CardTitle class="text-[21.6px]">Order Timeline</CardTitle></CardHeader>
-        <CardContent>
-          <OrderTimeline :status="orderData.order.status" :orderDate="orderData.order.orderDate" />
-        </CardContent>
-      </Card>
 
       <Card class="mb-6">
         <CardHeader><CardTitle>Items</CardTitle></CardHeader>
@@ -82,7 +80,7 @@ import CardContent from '@cd/components/ui/CardContent.vue'
 import CardHeader from '@cd/components/ui/CardHeader.vue'
 import CardTitle from '@cd/components/ui/CardTitle.vue'
 import Badge from '@cd/components/ui/Badge.vue'
-import OrderTimeline from '@cd/components/OrderTimeline.vue'
+
 import { FileText } from 'lucide-vue-next'
 
 const route = useRoute()

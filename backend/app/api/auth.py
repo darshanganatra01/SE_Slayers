@@ -5,6 +5,9 @@ from app import db
 from app.auth import AuthError, auth_required, issue_token, register_customer, serialize_user
 from app.models.user import User
 
+import yaml
+from flask import Response
+
 auth_ns = Namespace("auth", description="Authentication endpoints")
 
 login_model = auth_ns.model(
@@ -115,3 +118,11 @@ class MeResource(Resource):
         from app.auth import get_current_user
 
         return {"user": serialize_user(get_current_user())}, 200
+
+@auth_ns.route('/swagger.yaml')
+@auth_ns.hide
+class SwaggerYaml(Resource):
+    def get(self):
+        # Convert schema to YAML string
+        yaml_data = yaml.dump(api.__schema__, default_flow_style=False)
+        return Response(yaml_data, mimetype='text/yaml')
