@@ -25,11 +25,7 @@ demand_forecast_ns = Namespace(
     description="Item demand prediction for inventory planning",
 )
 
-# ── Paths ─────────────────────────────────────────────────────────────
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_CSV_PATH = os.path.join(_BASE_DIR, "Seed_values", "fake_order_data.csv")
-_SKU_CSV  = os.path.join(_BASE_DIR, "Seed_values", "SKU_table_2.csv")
-_PROD_CSV = os.path.join(_BASE_DIR, "Seed_values", "Product.csv")
 
 FORECAST_HORIZON = 7  # days ahead
 
@@ -37,52 +33,73 @@ FORECAST_HORIZON = 7  # days ahead
 # ── Helpers ───────────────────────────────────────────────────────────
 
 def _load_product_map() -> dict:
-    """Build skuid -> {product_name, category, stock_qty, threshold} from seed CSVs."""
-    # 1. Load products:  PID -> (PName, Category)
-    products: dict[str, tuple[str, str]] = {}
-    with open(_PROD_CSV, encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            products[row["PID"].strip()] = (row["PName"].strip(), row["Category"].strip())
-
-    # 2. Load SKUs and resolve product via VendorProduct mapping
-    #    SKU CSV has VendorProduct_ID which maps to a product.
-    #    The Vendor.csv/VendorProduct.csv mapping is simple: vpid -> pid.
-    #    For seed data the VendorProduct_ID in SKU CSV == vpid in VendorProduct.csv.
-    vp_csv = os.path.join(_BASE_DIR, "Seed_values", "VendorProduct.csv")
-    vp_to_pid: dict[str, str] = {}
-    with open(vp_csv, encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            vp_to_pid[row["VPID"].strip()] = row["PID"].strip()
+    """Build skuid -> {product_name, category, stock_qty, threshold} from database."""
+    from app import db
+    from app.models.sku import SKU
+    import json
 
     sku_map: dict[str, dict] = {}
-    with open(_SKU_CSV, encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            skuid = row["SKU ID"].strip()
-            vpid = row["VendorProduct_ID"].strip()
-            pid = vp_to_pid.get(vpid, "")
-            pname, category = products.get(pid, (f"SKU-{skuid}", "Unknown"))
-
-            specs_str = row.get("Specs_JSON", "{}").strip()
+    
+    skus = db.session.query(SKU).all()
+    for s in skus:
+        pname = f"SKU-{s.skuid}"
+        category = "Unknown"
+        
+        vp = s.vendor_product
+        if vp and vp.product:
+            pname = vp.product.pname
+            category = vp.product.category
+            
+        specs_str = ""
+        if s.specs:
             try:
-                specs_dict = json.loads(specs_str) if specs_str else {}
-                specs_joined = ", ".join(str(v) for v in specs_dict.values() if v)
+                specs_dict = json.loads(s.specs) if isinstance(s.specs, str) else s.specs
+                if isinstance(specs_dict, dict):
+                    specs_str = ", ".join(str(v) for v in specs_dict.values() if v)
+                else:
+                    specs_str = str(s.specs)
             except Exception:
-                specs_joined = ""
-
-            sku_map[skuid] = {
-                "product_name": pname,
-                "specs": specs_joined,
-                "category": category,
-                "stock_qty": int(row.get("stock_qty", 0) or 0),
-                "threshold": int(row.get("Threshold", 0) or 0),
-                "sell_rate": float(row.get("Current_Sell", 0) or 0),
-            }
+                specs_str = str(s.specs)
+                
+        sku_map[s.skuid] = {
+            "product_name": pname,
+            "specs": specs_str,
+            "category": category,
+            "stock_qty": s.stock_qty or 0,
+            "threshold": s.threshold or 0,
+            "sell_rate": float(s.current_sell_rate) if s.current_sell_rate else 0.0,
+        }
     return sku_map
 
 
 def _load_order_data() -> pd.DataFrame:
-    """Load synthetic order CSV into a DataFrame."""
-    df = pd.read_csv(_CSV_PATH, parse_dates=["order_date"])
+    """Load order data from database into a DataFrame."""
+    from app import db
+    from app.models.customer_order import CustomerOrder
+    from app.models.customer_order_detail import CustomerOrderDetail
+    import pandas as pd
+    
+    query = db.session.query(
+        CustomerOrderDetail.skuid,
+        CustomerOrderDetail.quantity,
+        CustomerOrder.order_date
+    ).join(CustomerOrder, CustomerOrderDetail.coid == CustomerOrder.coid)
+    
+    rows = query.all()
+    data = []
+    for r in rows:
+        data.append({
+            "skuid": r.skuid,
+            "quantity": r.quantity,
+            "order_date": r.order_date
+        })
+        
+    df = pd.DataFrame(data)
+    if not df.empty:
+        df["order_date"] = pd.to_datetime(df["order_date"])
+    else:
+        df = pd.DataFrame(columns=["skuid", "quantity", "order_date"])
+        
     return df
 
 

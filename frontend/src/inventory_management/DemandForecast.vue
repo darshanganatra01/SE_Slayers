@@ -7,7 +7,7 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          Refreshed Forecast
+          Refresh Forecast
         </button>
       </template>
     </AppTopbar>
@@ -25,9 +25,12 @@
           <div class="stat-sub">Stockout within 7 days</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Avg. Daily Predicted Demand</div>
-          <div class="stat-val">{{ avgDailyTotal }}</div>
-          <div class="stat-sub">Across all high-demand SKUs</div>
+          <div class="stat-label">SKU Health Status</div>
+          <div class="status-breakdown">
+            <div class="status-item"><span class="dot critical"></span> Critical: <span class="val">{{ criticalCount }}</span> SKUs</div>
+            <div class="status-item"><span class="dot warning"></span> Warning: <span class="val">{{ warningCount }}</span> SKUs</div>
+            <div class="status-item"><span class="dot ok"></span> OK: <span class="val">{{ okCount }}</span> SKUs</div>
+          </div>
         </div>
       </div>
 
@@ -116,11 +119,9 @@ const headMeta = computed(() => {
 })
 
 const restockAlertCount = computed(() => forecasts.value.filter(f => f.restock_alert).length)
-const avgDailyTotal = computed(() => {
-  if (forecasts.value.length === 0) return 0
-  const total = forecasts.value.reduce((acc, f) => acc + f.avg_daily_predicted, 0)
-  return (total / forecasts.value.length).toFixed(1)
-})
+const criticalCount = computed(() => forecasts.value.filter(f => f.restock_alert).length)
+const warningCount = computed(() => forecasts.value.filter(f => !f.restock_alert && f.days_until_stockout < 30).length)
+const okCount = computed(() => forecasts.value.filter(f => !f.restock_alert && f.days_until_stockout >= 30).length)
 
 const fetchForecast = async () => {
   loading.value = true
@@ -188,6 +189,18 @@ onMounted(() => {
 .stat-label { font-size: 11px; font-weight: 500; color: var(--ink-4); text-transform: uppercase; letter-spacing: 0.5px; }
 .stat-val { font-size: 24px; font-weight: 600; color: var(--ink); }
 .stat-sub { font-size: 12px; color: var(--ink-4); }
+
+.status-breakdown {
+  display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+}
+.status-item {
+  font-size: 13px; font-weight: 500; color: var(--ink); display: flex; align-items: center; gap: 6px;
+}
+.status-item .val { font-weight: 700; }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot.critical { background: #b91c1c; }
+.dot.warning { background: #d97706; }
+.dot.ok { background: #059669; }
 
 .loading-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 0; gap: 16px;
