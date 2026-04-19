@@ -9,8 +9,9 @@ class Config:
     JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "12"))
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/se_slayers",
+        "postgresql+psycopg://postgres:mrdarshan@localhost:5431/se_slayers",
     )
+    SQLALCHEMY_ECHO = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     RESTX_MASK_SWAGGER = False          # disable X-Fields header in Swagger UI
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -35,7 +36,7 @@ class TestingConfig(Config):
     JWT_EXPIRATION_HOURS = 1
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/se_slayers_test",
+        "postgresql+psycopg://postgres:mrdarshan@localhost:5431/se_slayers_test",
     )
 
 

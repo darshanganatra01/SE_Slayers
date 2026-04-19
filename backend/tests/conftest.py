@@ -25,3 +25,15 @@ def app():
 @pytest.fixture()
 def client(app):
     return app.test_client()
+
+@pytest.fixture()
+def auth_headers(app):
+    from app.seeds import seed_auth_users
+    from app.auth import issue_token
+    from app.models.user import User
+    
+    with app.app_context():
+        seed_auth_users()
+        admin = User.query.filter_by(email="owner@metrohardware.com").first()
+        token = issue_token(admin)
+        return {"Authorization": f"Bearer {token}"}

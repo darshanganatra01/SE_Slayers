@@ -27,11 +27,11 @@ export const useAIStore = defineStore('aiFeature', () => {
     formData.append('pdf', pdfFile)
 
     try {
+      const token = localStorage.getItem('se_slayers.auth.token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
       const res = await fetch('/api/ai-feature/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
+        headers,
         body: formData
       })
       
@@ -62,11 +62,9 @@ export const useAIStore = defineStore('aiFeature', () => {
       }
 
       try {
-        const res = await fetch(`/api/ai-feature/status/${jobId.value}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-          }
-        })
+        const token = localStorage.getItem('se_slayers.auth.token')
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+        const res = await fetch(`/api/ai-feature/status/${jobId.value}`, { headers })
         const data = await res.json()
         
         if (data.state === 'SUCCESS') {

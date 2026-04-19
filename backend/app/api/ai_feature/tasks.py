@@ -1,8 +1,8 @@
 from celery_app import celery_app
 from app import create_app, db
 from app.api.ai_feature.services import (
-    get_api_keys, create_clients, validate_vendor_pdf, extract_tables, 
-    match_skus, validate
+    get_api_keys, create_clients, get_pro_client,
+    validate_vendor_pdf, extract_tables, match_skus, validate, retry_anomalies
 )
 from app.models.vendor import Vendor, VendorProduct
 import os
@@ -38,11 +38,12 @@ def process_vendor_pdf_task(self, vendor_id, file_path):
 
             api_keys = get_api_keys()
             clients = create_clients(api_keys)
+            pro_client = get_pro_client()  # None if GEMINI_PRO_API_KEY not set in .env
 
             # Step 1: Pre-flight validation (Option 3)
             self.update_state(state='PROGRESS', meta={'message': 'Validating PDF Vendor Match...'})
             try:
-                is_valid_vendor = validate_vendor_pdf(pdf_bytes, vendor.vendor_name, clients)
+                is_valid_vendor = validate_vendor_pdf(pdf_bytes, vendor.vendor_name, clients, pro_client=pro_client)
             except Exception as e:
                 return {"status": "error", "message": f"Validation failed: {str(e)}"}
 
@@ -51,13 +52,13 @@ def process_vendor_pdf_task(self, vendor_id, file_path):
 
             # Step 2: Extraction
             self.update_state(state='PROGRESS', meta={'message': 'Extracting Tables...'})
-            tables = extract_tables(pdf_bytes, clients)
+            tables = extract_tables(pdf_bytes, clients, pro_client=pro_client)
             if not tables:
                 return {"status": "error", "message": "No tables extracted from PDF."}
                 
             # Step 3: Matching
             self.update_state(state='PROGRESS', meta={'message': 'Matching SKUs with Prices...'})
-            matches = match_skus(tables, enriched_skus, clients)
+            matches = match_skus(tables, enriched_skus, clients, pro_client=pro_client)
             
             # Step 4: Validation & Retry Loop
             self.update_state(state='PROGRESS', meta={'message': 'Validating Price Changes...'})
@@ -68,7 +69,7 @@ def process_vendor_pdf_task(self, vendor_id, file_path):
                 self.update_state(state='PROGRESS', meta={'message': f'Self-correcting {len(anomalies)} anomalies...'})
                 # Re-run and overwrite the anomaly matches
                 from app.api.ai_feature.services import retry_anomalies
-                retried_matches = retry_anomalies(tables, anomalies, enriched_skus, clients)
+                retried_matches = retry_anomalies(tables, anomalies, enriched_skus, clients, pro_client=pro_client)
                 
                 # Merge retried matches, replacing old anomalies in `matches`
                 if retried_matches:

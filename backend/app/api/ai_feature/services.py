@@ -7,50 +7,99 @@ import os
 import google.genai as genai
 from google.genai.types import GenerateContentConfig
 
-DEFAULT_API_KEYS = [
-    "AIzaSyDdlZiWIa3VoIb_wkJDHLexMsMHYBn7k-c",
-    "AIzaSyCQcs-RgMqGGJ7TyRVl-Yrupp5jrSmKWY4",
-]
+GEMINI_MODEL     = "gemini-2.5-flash"   # used with free keys
+GEMINI_PRO_MODEL = "gemini-3-flash-preview"     # used with billed fallback key only
 
-def get_api_keys():
-    env_keys = os.environ.get("GEMINI_API_KEY")
-    if env_keys:
-        return [k.strip() for k in env_keys.split(",") if k.strip()]
-    return DEFAULT_API_KEYS
+def get_api_keys() -> list[str]:
+    """Load Gemini API keys strictly from the GEMINI_API_KEY environment variable.
+    
+    Expects a comma-separated list of exactly 2 keys in .env:
+        GEMINI_API_KEY=key1,key2
+    
+    Raises RuntimeError if env var is missing or no valid keys found.
+    Never returns hardcoded keys — all secrets must live in .env only.
+    """
+    env_value = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not env_value:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not set. "
+            "Add it to your .env file as a comma-separated list of API keys: "
+            "GEMINI_API_KEY=key1,key2"
+        )
+    keys = [k.strip() for k in env_value.split(",") if k.strip()]
+    if not keys:
+        raise RuntimeError("GEMINI_API_KEY is set but contains no valid keys.")
+    return keys
 
 def create_clients(api_keys: list[str]) -> list:
-    return [genai.Client(api_key=key.strip()) for key in api_keys if key.strip()]
+    keys = [k.strip() for k in api_keys if k and k.strip()]
+    if not keys:
+        raise RuntimeError("No GEMINI_API_KEY configured. Set GEMINI_API_KEY env var with comma-separated API keys.")
+    return [genai.Client(api_key=key) for key in keys]
 
-def call_gemini(clients: list, model: str, contents, max_retries=3):
+def get_pro_client():
+    """Returns a Gemini client for the billed pro key (GEMINI_PRO_API_KEY in .env).
+    Returns None if not configured — pro fallback is optional.
+    """
+    pro_key = os.environ.get("GEMINI_PRO_API_KEY", "").strip()
+    if not pro_key:
+        return None
+    return genai.Client(api_key=pro_key)
+
+def call_gemini(clients: list, model: str, contents, max_retries=3,
+                pro_client=None, pro_model=None):
+    """Call Gemini with automatic key rotation and tiered pro fallback.
+
+    Order of attempts:
+      1. Try every free client (key1, key2, key3 ...) across max_retries rounds.
+      2. ONLY if all free keys are exhausted → try pro_client with pro_model once.
+      3. If pro also fails → raise.
+    """
     config = GenerateContentConfig(response_mime_type="application/json")
     if not isinstance(clients, list):
         clients = [clients]
-    total_attempts = max_retries * len(clients)
-    attempt = 0
+    last_exception = None
+
+    # ── Stage 1: free keys ────────────────────────────────────────
     for retry_round in range(max_retries):
-        for key_idx, client in enumerate(clients):
-            attempt += 1
+        for client in clients:
             try:
-                response = client.models.generate_content(
-                    model=model,
-                    contents=contents,
-                    config=config,
+                return client.models.generate_content(
+                    model=model, contents=contents, config=config
                 )
-                return response
             except Exception as e:
+                last_exception = e
                 error_str = str(e).lower()
-                is_rate_limit = any(
+                is_retryable = any(
                     s in error_str
-                    for s in ["429", "rate", "quota", "resource_exhausted", "too many"]
+                    for s in [
+                        "429", "503", "502", "500",
+                        "rate", "quota", "resource_exhausted",
+                        "too many", "overloaded", "unavailable",
+                        "service unavailable", "server error", "try again",
+                    ]
                 )
-                if is_rate_limit and attempt < total_attempts:
-                    if len(clients) == 1:
-                        time.sleep(min(2 ** retry_round * 15, 60))
-                else:
-                    raise
+                if not is_retryable:
+                    raise  # hard error — don't waste pro key on this
+                # retryable: move on to next key / round
         if retry_round < max_retries - 1:
-            time.sleep(min(2 ** retry_round * 15, 60))
-    raise RuntimeError(f"All {len(clients)} API keys exhausted after {max_retries} rounds")
+            time.sleep(min(2 ** retry_round * 10, 60))
+
+    # ── Stage 2: pro fallback (ONLY reached if all free keys failed) ──
+    if pro_client is not None:
+        pro_model_name = pro_model or GEMINI_PRO_MODEL
+        try:
+            return pro_client.models.generate_content(
+                model=pro_model_name, contents=contents, config=config
+            )
+        except Exception as e:
+            last_exception = e
+
+    raise RuntimeError(
+        f"All {len(clients)} free key(s) exhausted after {max_retries} rounds"
+        + (" and pro fallback also failed" if pro_client else "")
+        + f". Last error: {last_exception}"
+    )
 
 def safe_json_parse(raw: str, context: str = "response") -> list | dict:
     text = raw.strip()
@@ -70,19 +119,20 @@ If you are confident it belongs to a completely different vendor, or is an unrel
 If unsure, answer YES to let it pass through.
 """
 
-def validate_vendor_pdf(pdf_bytes: bytes, vendor_name: str, clients) -> bool:
+def validate_vendor_pdf(pdf_bytes: bytes, vendor_name: str, clients, pro_client=None) -> bool:
     pdf_data = base64.b64encode(pdf_bytes).decode()
     prompt = VALIDATE_VENDOR_PROMPT.format(vendor_name=vendor_name)
     
     response = call_gemini(
         clients,
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=[{
             "parts": [
                 {"inline_data": {"mime_type": "application/pdf", "data": pdf_data}},
                 {"text": prompt}
             ]
         }],
+        pro_client=pro_client,
     )
     res_text = response.text.strip().upper()
     return "NO" not in res_text  # Defaults to passing unless explicitly NO
@@ -110,17 +160,18 @@ STRICT RULES:
 Return ONLY the JSON array.
 """
 
-def extract_tables(pdf_bytes: bytes, clients) -> list[dict]:
+def extract_tables(pdf_bytes: bytes, clients, pro_client=None) -> list[dict]:
     pdf_data = base64.b64encode(pdf_bytes).decode()
     response = call_gemini(
         clients,
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=[{
             "parts": [
                 {"inline_data": {"mime_type": "application/pdf", "data": pdf_data}},
                 {"text": EXTRACT_PROMPT}
             ]
         }],
+        pro_client=pro_client,
     )
     return safe_json_parse(response.text.strip(), "table extraction")
 
@@ -191,7 +242,7 @@ MATCHING RULES:
 5. Return ONLY the JSON array.
 """
 
-def match_skus(tables: list[dict], skus: list[dict], clients) -> list[dict]:
+def match_skus(tables: list[dict], skus: list[dict], clients, pro_client=None) -> list[dict]:
     batches = _group_skus_by_product(skus)
     all_matches = []
     for i, batch in enumerate(batches):
@@ -201,16 +252,18 @@ def match_skus(tables: list[dict], skus: list[dict], clients) -> list[dict]:
         try:
             response = call_gemini(
                 clients,
-                model="gemini-2.5-flash",
+                model=GEMINI_MODEL,
                 contents=[{"parts": [{"text": prompt}]}],
+                pro_client=pro_client,
             )
             batch_matches = safe_json_parse(response.text.strip(), f"batch {i+1} match response")
         except Exception:
             time.sleep(3)
             response = call_gemini(
                 clients,
-                model="gemini-2.5-flash",
+                model=GEMINI_MODEL,
                 contents=[{"parts": [{"text": prompt}]}],
+                pro_client=pro_client,
             )
             batch_matches = safe_json_parse(response.text.strip(), f"batch {i+1} retry")
             
@@ -219,7 +272,7 @@ def match_skus(tables: list[dict], skus: list[dict], clients) -> list[dict]:
             time.sleep(BATCH_DELAY)
     return all_matches
 
-def retry_anomalies(tables: list[dict], anomalies: list[dict], skus: list[dict], clients) -> list[dict]:
+def retry_anomalies(tables: list[dict], anomalies: list[dict], skus: list[dict], clients, pro_client=None) -> list[dict]:
     if not anomalies:
         return []
     
@@ -233,7 +286,7 @@ def retry_anomalies(tables: list[dict], anomalies: list[dict], skus: list[dict],
     prompt += "\nSPECIAL INSTRUCTION: In the previous attempt, the prices you matched for these SKUs were highly anomalous (deviated by >50%). Re-examine the tables intensely. Do not hallucinate columns. Ensure you are extracting from the true Rate/Price column."
     
     try:
-        response = call_gemini(clients, model="gemini-2.5-flash", contents=[{"parts": [{"text": prompt}]}])
+        response = call_gemini(clients, model=GEMINI_MODEL, contents=[{"parts": [{"text": prompt}]}], pro_client=pro_client)
         return safe_json_parse(response.text.strip(), "retry response")
     except Exception:
         return []

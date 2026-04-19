@@ -29,12 +29,9 @@ from datetime import datetime
 
 MAX_PDF_SIZE_MB = 20
 
-# ── Hardcoded API keys (auto-rotates on rate limit) ──────────────────────────
-# Paste your Gemini API keys below. --apikey flag overrides these if provided.
-DEFAULT_API_KEYS = [
-    "AIzaSyDdlZiWIa3VoIb_wkJDHLexMsMHYBn7k-c",
-    "AIzaSyCQcs-RgMqGGJ7TyRVl-Yrupp5jrSmKWY4",
-]
+# No default API keys are stored in code. Provide keys via --apikey or
+# the GEMINI_API_KEY environment variable (comma-separated for rotation).
+DEFAULT_API_KEYS = []
 
 
 def _sku_id(raw_id) -> str:
@@ -274,10 +271,10 @@ def extract_tables(pdf_path: str, clients) -> list[dict]:
     with open(pdf_path, "rb") as f:
         pdf_data = base64.b64encode(f.read()).decode()
 
-    print(f"  Sending {os.path.basename(pdf_path)} to Gemini 2.5 Flash...")
+    print(f"  Sending {os.path.basename(pdf_path)} to model gpt-3.1-pro...")
     response = call_gemini(
         clients,
-        model="gemini-2.5-flash",
+        model="gpt-3.1-pro",
         contents=[{
             "parts": [
                 {"inline_data": {"mime_type": "application/pdf", "data": pdf_data}},
@@ -423,7 +420,7 @@ def match_skus(tables: list[dict], skus: list[dict], clients) -> list[dict]:
 
         response = call_gemini(
             clients,
-            model="gemini-2.5-flash",
+            model="gpt-3.1-pro",
             contents=[{"parts": [{"text": prompt}]}],
         )
 
@@ -437,7 +434,7 @@ def match_skus(tables: list[dict], skus: list[dict], clients) -> list[dict]:
             time.sleep(5)
             response = call_gemini(
                 clients,
-                model="gemini-2.5-flash",
+                model="gpt-3.1-pro",
                 contents=[{"parts": [{"text": prompt}]}],
             )
             raw = response.text.strip()
