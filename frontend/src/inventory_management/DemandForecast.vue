@@ -60,7 +60,7 @@
               <td class="num-cell">
                 <div class="prod-sku">{{ item.skuid }}</div>
               </td>
-              <td>
+              <td @click="goVendor(item)" class="clickable-cell">
                 <div class="prod-name">{{ item.product_name }}</div>
                 <div class="prod-sub">{{ item.specs }}</div>
               </td>
@@ -106,7 +106,10 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import AppTopbar from '../components/AppTopbar.vue'
+
+const router = useRouter()
 
 const forecasts = ref([])
 const loading = ref(false)
@@ -122,6 +125,18 @@ const restockAlertCount = computed(() => forecasts.value.filter(f => f.restock_a
 const criticalCount = computed(() => forecasts.value.filter(f => f.restock_alert).length)
 const warningCount = computed(() => forecasts.value.filter(f => !f.restock_alert && f.days_until_stockout < 30).length)
 const okCount = computed(() => forecasts.value.filter(f => !f.restock_alert && f.days_until_stockout >= 30).length)
+
+const goVendor = (item) => {
+  if (!item.pid) return
+  router.push({
+    name: 'vendors',
+    query: {
+      tab: 'compare',
+      partId: item.pid,
+      specKey: item.spec_key
+    }
+  })
+}
 
 const fetchForecast = async () => {
   loading.value = true
@@ -233,9 +248,12 @@ onMounted(() => {
 .forecast-table tr:last-child td { border-bottom: none; }
 .forecast-table tr.row-urgent { background: #fffefe; }
 
-.prod-name { font-weight: 500; margin-bottom: 2px; }
+.prod-name { font-weight: 500; margin-bottom: 2px; transition: color 0.2s; }
 .prod-sub { font-size: 11px; color: var(--ink-4); }
 .prod-sku { font-size: 11px; color: var(--ink-4); font-family: 'Geist Mono', monospace; }
+
+.clickable-cell { cursor: pointer; }
+.clickable-cell:hover .prod-name { color: var(--blue); text-decoration: underline; }
 
 .badge {
   background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 11px;

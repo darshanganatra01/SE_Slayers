@@ -32,6 +32,29 @@ FORECAST_HORIZON = 7  # days ahead
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
+def _spec_values(specs: dict | None) -> list[str]:
+    if not isinstance(specs, dict) or not specs:
+        return []
+    return [str(value).strip() for value in specs.values() if str(value).strip()]
+
+
+def _build_spec_display(specs: dict | None) -> tuple[str, str]:
+    values = _spec_values(specs)
+    if not values:
+        return "-", ""
+    size = values[-1]
+    detail_values = values[:-1]
+    details = " · ".join(detail_values)
+    return size, details
+
+
+def _build_spec_key(specs: dict | None) -> str:
+    size, details = _build_spec_display(specs)
+    if details:
+        return f"{size}\n{details}"
+    return size
+
+
 def _load_product_map() -> dict:
     """Build skuid -> {product_name, category, stock_qty, threshold} from database."""
     from app import db
@@ -44,26 +67,31 @@ def _load_product_map() -> dict:
     for s in skus:
         pname = f"SKU-{s.skuid}"
         category = "Unknown"
+        pid = ""
         
         vp = s.vendor_product
         if vp and vp.product:
             pname = vp.product.pname
             category = vp.product.category
+            pid = vp.product.pid
             
         specs_str = ""
+        raw_specs = {}
         if s.specs:
             try:
-                specs_dict = json.loads(s.specs) if isinstance(s.specs, str) else s.specs
-                if isinstance(specs_dict, dict):
-                    specs_str = ", ".join(str(v) for v in specs_dict.values() if v)
+                raw_specs = json.loads(s.specs) if isinstance(s.specs, str) else s.specs
+                if isinstance(raw_specs, dict):
+                    specs_str = ", ".join(str(v) for v in raw_specs.values() if v)
                 else:
                     specs_str = str(s.specs)
             except Exception:
                 specs_str = str(s.specs)
                 
         sku_map[s.skuid] = {
+            "pid": pid,
             "product_name": pname,
             "specs": specs_str,
+            "spec_key": _build_spec_key(raw_specs),
             "category": category,
             "stock_qty": s.stock_qty or 0,
             "threshold": s.threshold or 0,
@@ -257,6 +285,8 @@ class DemandPredictResource(Resource):
 
             forecasts.append({
                 "skuid": skuid,
+                "pid": meta.get("pid", ""),
+                "spec_key": meta.get("spec_key", ""),
                 "product_name": meta["product_name"],
                 "specs": meta["specs"],
                 "category": meta["category"],
