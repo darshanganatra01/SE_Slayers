@@ -8,13 +8,9 @@ from app.api.ai_feature.tasks import process_vendor_pdf_task
 import os
 import tempfile
 
-from app.auth import AuthError, auth_required
+from app.auth import auth_required
 
 ai_ns = Namespace("ai-feature", description="AI PDF Data Extraction Features")
-
-@ai_ns.errorhandler(AuthError)
-def handle_auth_error(error: AuthError):
-    return {"message": error.message}, error.status_code
 
 @ai_ns.route("/vendors")
 class AIVendors(Resource):

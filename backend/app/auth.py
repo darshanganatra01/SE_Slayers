@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from uuid import uuid4
 
@@ -29,7 +29,7 @@ def generate_customer_id() -> str:
 
 
 def issue_token(user: User) -> str:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     expires_at = now + timedelta(hours=current_app.config["JWT_EXPIRATION_HOURS"])
     payload = {
         "sub": user.uid,

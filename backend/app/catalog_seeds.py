@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
-import random
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from pathlib import Path
 
 from app import db
@@ -29,18 +28,19 @@ def _clean(value: str | None) -> str | None:
 
 def _to_int(value: str | None) -> int | None:
     cleaned = _clean(value)
-    return int(cleaned) if cleaned is not None else None
+    if cleaned is None:
+        return None
+    # Handle float-like strings e.g. '1.0' -> 1
+    try:
+        return int(float(cleaned))
+    except (ValueError, TypeError):
+        return None
 
 
 def _to_decimal(value: str | None) -> Decimal | None:
     cleaned = _clean(value)
     return Decimal(cleaned) if cleaned is not None else None
 
-
-def _compute_sell_price(buy_price: Decimal | None) -> Decimal | None:
-    if buy_price is None:
-        return None
-    return (buy_price * Decimal("1.50")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def seed_products() -> int:
@@ -76,7 +76,7 @@ def seed_vendors() -> int:
 
         vendor.vendor_name = row["VendorName"].strip()
         vendor.vendor_prefix = _clean(row.get("VendorPrefix"))
-        vendor.lead_time = random.randint(3, 10)
+        vendor.lead_time = _to_int(row.get("lead_time"))  # read from CSV, not random
         vendor.location = _clean(row.get("Location"))
         vendor.contact = _clean(row.get("Contact"))
         vendor.email = _clean(row.get("Email"))
@@ -117,6 +117,7 @@ def seed_skus() -> int:
             seeded += 1
 
         buy_rate = _to_decimal(row.get("Current_Buy"))
+        sell_rate = _to_decimal(row.get("Current_Sell"))
 
         sku.vpid = row["VendorProduct_ID"].strip()
         sku.unit_measurement_buy = _to_int(row.get("UnitMeasurementBuy"))
@@ -124,9 +125,13 @@ def seed_skus() -> int:
         sku.current_buy_rate = buy_rate
         sku.unit_measurement_sell = _to_int(row.get("UnitMeasurementSell"))
         sku.lot_size_sell = _to_int(row.get("LotSizeSell"))
-        sku.current_sell_rate = _compute_sell_price(buy_rate)
-        sku.specs = json.loads(row["Specs_JSON"])
-        sku.stock_qty = random.randint(150, 500)
+        sku.current_sell_rate = sell_rate
+        specs_raw = row.get("Specs_JSON", "").strip()
+        try:
+            sku.specs = json.loads(specs_raw) if specs_raw else {}
+        except json.JSONDecodeError:
+            sku.specs = {}
+        sku.stock_qty = _to_int(row.get("stock_qty"))
         sku.threshold = _to_int(row.get("Threshold"))
 
     db.session.commit()

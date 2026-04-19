@@ -145,11 +145,9 @@ const tabs = [
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/ai-feature/vendors', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-      }
-    });
+    const token = localStorage.getItem('se_slayers.auth.token')
+    const headers = token ? { Authorization: `Bearer ${token}` } : {}
+    const res = await fetch('/api/ai-feature/vendors', { headers })
     const data = await res.json()
     if (res.ok) {
       vendors.value = data
@@ -206,12 +204,14 @@ const submitApprovals = async () => {
   
   isUpdating.value = true
   try {
+    const token = localStorage.getItem('se_slayers.auth.token')
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    }
     const res = await fetch('/api/ai-feature/confirm', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-      },
+      headers,
       body: JSON.stringify({
         approved_matches: aiStore.selectedMatches
       })
