@@ -21,13 +21,19 @@ export default {
 
 <style scoped>
 .topbar {
-  height: 48px; background: var(--white);
+  min-height: 48px; background: var(--white);
   border-bottom: 1.5px solid var(--border);
   display: flex; align-items: center;
-  padding: 0 22px; gap: 10px; flex-shrink: 0;
+  padding: 8px 22px; gap: 10px; flex-shrink: 0;
 }
 .topbar-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .topbar-sep   { width: 1px; height: 14px; background: var(--border); }
-.topbar-meta  { font-size: 11.5px; color: var(--ink-4); font-family: 'Geist Mono', monospace; }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.topbar-meta  {
+  font-size: 11.5px; color: var(--ink-4); font-family: 'Geist Mono', monospace;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar-right {
+  margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  min-width: 0; flex: 1 1 auto;
+}
 </style>

@@ -3,14 +3,17 @@
 
     <AppTopbar title="Vendors" :meta="headMeta">
       <template #actions>
-        <AppSearchbar v-model="searchQ" placeholder="Search vendors…" />
-        <FilterBar
-          v-if="activeTab === 'list'"
-          v-model:lead-time="filterLeadTime"
-          v-model:location="filterLocation"
-          :locations="uniqueLocations"
-        />
-        <button class="btn btn-primary" @click="notifyAddVendorComingSoon">+ Add Vendor</button>
+        <div class="vendor-actions">
+          <AppSearchbar v-model="searchQ" class="vendor-search" placeholder="Search vendors…" />
+          <FilterBar
+            v-if="activeTab === 'list'"
+            class="vendor-filterbar"
+            v-model:lead-time="filterLeadTime"
+            v-model:location="filterLocation"
+            :locations="uniqueLocations"
+          />
+          <button class="btn btn-primary vendor-add-btn" @click="openAddVendor">+ Add Vendor</button>
+        </div>
       </template>
     </AppTopbar>
 
@@ -54,7 +57,10 @@
         :vendor="selectedVendor"
         :loading="store.vendorDetailLoading"
         :error="store.vendorDetailError"
+        :deleting="deletingVendorId === selectedVendor?.id"
         @back="goBackToList"
+        @edit="openEditVendor"
+        @delete="handleDeleteVendor"
       />
     </div>
 
@@ -98,6 +104,18 @@
       @submit="handleProcurement"
     />
 
+    <AddVendorModal
+      :visible="showVendorModal"
+      :mode="vendorModalMode"
+      :parts-catalog="store.compareParts"
+      :parts-loading="store.compareLoading"
+      :initial-vendor="vendorModalVendor"
+      :saving="store.vendorSaving"
+      :save-error="store.vendorSaveError"
+      @close="closeVendorModal"
+      @save="handleVendorSave"
+    />
+
     <!-- Toast -->
     <AppToast ref="toast" />
 
@@ -106,6 +124,7 @@
 
 <script>
 import { useVendorStore }  from './store.js'
+import { useAuthStore }    from '../stores/auth'
 import AppTopbar           from '../components/AppTopbar.vue'
 import AppSearchbar        from '../components/AppSearchbar.vue'
 import AppToast            from '../components/AppToast.vue'
@@ -116,13 +135,14 @@ import PartList            from './components/PartList.vue'
 import PartDetailPanel     from './components/PartDetailPanel.vue'
 import ProcurementModal    from './components/ProcurementModal.vue'
 import ProcurementHistory  from './components/ProcurementHistory.vue'
+import AddVendorModal      from './components/AddVendorModal.vue'
 
 export default {
   name: 'VendorManagement',
   components: {
     AppTopbar, AppSearchbar, AppToast, FilterBar,
     VendorTable, VendorDetails, PartList, PartDetailPanel,
-    ProcurementModal, ProcurementHistory
+    ProcurementModal, ProcurementHistory, AddVendorModal
   },
 
   setup() {
@@ -141,6 +161,10 @@ export default {
       selectedVendorId: null,
       selectedProcurementId: null,
       markingReceivedId: null,
+      deletingVendorId: null,
+      showVendorModal: false,
+      vendorModalMode: 'add',
+      vendorModalVendor: null,
 
       showProcurement:    false,
       procurementPrefill: null,
@@ -300,8 +324,88 @@ export default {
       this.compareSpecKey = null
     },
 
-    notifyAddVendorComingSoon() {
-      this.$refs.toast.show('+', 'Vendor creation will be added later', 'This screen now uses live vendor data')
+    openAddVendor() {
+      this.store.vendorSaveError = ''
+      this.vendorModalMode = 'add'
+      this.vendorModalVendor = null
+      this.showVendorModal = true
+    },
+
+    openEditVendor() {
+      if (!this.selectedVendor) return
+      this.store.vendorSaveError = ''
+      this.vendorModalMode = 'edit'
+      this.vendorModalVendor = this.selectedVendor
+      this.showVendorModal = true
+    },
+
+    closeVendorModal() {
+      this.store.vendorSaveError = ''
+      this.showVendorModal = false
+      this.vendorModalVendor = null
+    },
+
+    async handleVendorSave(formData) {
+      try {
+        const vendor = this.vendorModalMode === 'edit' && this.vendorModalVendor?.id
+          ? await this.store.updateVendor(this.vendorModalVendor.id, formData)
+          : await this.store.createVendor(formData)
+
+        this.closeVendorModal()
+        this.$router.push({ name: 'vendor-details', params: { vendorId: vendor.id } })
+        this.$refs.toast.show(
+          this.vendorModalMode === 'edit' ? '✓' : '+',
+          this.vendorModalMode === 'edit' ? 'Vendor updated' : 'Vendor added',
+          vendor.name
+        )
+      } catch (error) {
+        this.$refs.toast.show(
+          '!',
+          this.vendorModalMode === 'edit' ? 'Unable to update vendor' : 'Unable to add vendor',
+          error.message || 'Please try again'
+        )
+      }
+    },
+
+    async handleDeleteVendor() {
+      const vendor = this.selectedVendor
+      if (!vendor || this.deletingVendorId === vendor.id) return
+
+      const shouldDelete = window.confirm(
+        `Delete ${vendor.name}? This will remove the vendor and its mapped catalog entries.`
+      )
+      if (!shouldDelete) return
+
+      this.deletingVendorId = vendor.id
+      try {
+        await this.deleteVendor(vendor.id)
+        this.$router.push({ name: 'vendors' })
+        this.$refs.toast.show('✓', 'Vendor deleted', vendor.name)
+      } catch (error) {
+        this.$refs.toast.show('!', 'Unable to delete vendor', error.message || 'Please try again')
+      } finally {
+        if (this.deletingVendorId === vendor.id) {
+          this.deletingVendorId = null
+        }
+      }
+    },
+
+    async deleteVendor(vendorId) {
+      if (typeof this.store.deleteVendor === 'function') {
+        await this.store.deleteVendor(vendorId)
+        return
+      }
+
+      const authStore = useAuthStore()
+      await authStore.authenticatedRequest(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+        method: 'DELETE'
+      })
+
+      this.store.directoryVendors = this.store.directoryVendors.filter((vendor) => vendor.id !== String(vendorId))
+      if (this.store.selectedDirectoryVendor?.id === String(vendorId)) {
+        this.store.clearVendorDetails()
+      }
+      await this.store.fetchCompareCatalog()
     },
 
     handleVendorSelected(selection) {
@@ -384,6 +488,27 @@ export default {
 .tab-body    { flex: 1; overflow-y: auto; }
 .tab-list    { padding: 18px 22px; }
 .tab-compare { display: flex; overflow: hidden; }
+.vendor-actions {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vendor-search {
+  flex: 0 1 200px;
+  min-width: 160px;
+}
+.vendor-filterbar {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.vendor-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .vendor-error {
   margin-bottom: 14px;
   padding: 12px 14px;

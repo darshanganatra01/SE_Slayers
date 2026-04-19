@@ -397,3 +397,323 @@ def test_vendor_procurement_can_be_marked_received(client, app):
         sku = SKU.query.filter_by(skuid="SKU-1").first()
         assert sku is not None
         assert sku.stock_qty == 17
+
+
+def test_vendor_creation_persists_products_and_spec_prices(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+
+        template_vendor = Vendor(
+            vid="1",
+            vendor_name="Template Vendor",
+            vendor_prefix="TV",
+        )
+        product_one = Product(pid="10", pname="Borcap", category="Petrol Engine")
+        product_two = Product(pid="11", pname="GI Murli connector", category="Petrol Engine")
+        template_vendor_product = VendorProduct(vpid="VP-1", vid="1", pid="10")
+        template_sku = SKU(
+            skuid="SKU-1",
+            vpid="VP-1",
+            current_buy_rate=Decimal("42.00"),
+            unit_measurement_buy=6,
+            lot_size_buy=3,
+            unit_measurement_sell=2,
+            lot_size_sell=4,
+            current_sell_rate=Decimal("64.00"),
+            threshold=12,
+            specs={"spec1": "12mm x 45 mm", "spec2": '1.5"'},
+        )
+        db.session.add_all([template_vendor, product_one, product_two, template_vendor_product, template_sku])
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Alpha Industrial Supply",
+            "phone": "9876543210",
+            "email": "alpha@example.com",
+            "address": "Rajkot Industrial Estate",
+            "leadTime": 5,
+            "productIds": ["10", "11"],
+            "prices": [
+                {
+                    "productId": "10",
+                    "specs": {"spec1": "12mm x 45 mm", "spec2": '1.5"'},
+                    "price": "44.25",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.get_json()["vendor"]
+    assert payload["name"] == "Alpha Industrial Supply"
+    assert payload["prefix"] == "AIS"
+    assert payload["leadTime"] == 5
+    assert payload["location"] == "Rajkot Industrial Estate"
+    assert payload["contact"]["phone"] == "9876543210"
+    assert payload["contact"]["email"] == "alpha@example.com"
+    assert payload["parts"] == ["Borcap", "GI Murli connector"]
+    assert payload["priceEntries"] == [
+        {
+            "productId": "10",
+            "skuId": payload["priceEntries"][0]["skuId"],
+            "key": '1.5"\n12mm x 45 mm',
+            "size": '1.5"',
+            "spec": "12mm x 45 mm",
+            "specification": '1.5" · 12mm x 45 mm',
+            "specs": {"spec1": "12mm x 45 mm", "spec2": '1.5"'},
+            "price": 44.25,
+        }
+    ]
+
+    with app.app_context():
+        vendor = Vendor.query.filter_by(vendor_name="Alpha Industrial Supply").first()
+        assert vendor is not None
+        assert vendor.vendor_prefix == "AIS"
+
+        vendor_products = VendorProduct.query.filter_by(vid=vendor.vid).order_by(VendorProduct.pid.asc()).all()
+        assert [vendor_product.pid for vendor_product in vendor_products] == ["10", "11"]
+
+        created_sku = (
+            db.session.query(SKU)
+            .join(VendorProduct, VendorProduct.vpid == SKU.vpid)
+            .filter(VendorProduct.vid == vendor.vid, VendorProduct.pid == "10")
+            .one()
+        )
+        assert created_sku.current_buy_rate == Decimal("44.25")
+        assert created_sku.unit_measurement_buy == 6
+        assert created_sku.lot_size_buy == 3
+        assert created_sku.unit_measurement_sell == 2
+        assert created_sku.lot_size_sell == 4
+        assert created_sku.current_sell_rate == Decimal("64.00")
+        assert created_sku.threshold == 12
+        assert created_sku.stock_qty == 0
+
+        empty_mapping = VendorProduct.query.filter_by(vid=vendor.vid, pid="11").first()
+        assert empty_mapping is not None
+        assert empty_mapping.skus.count() == 0
+
+
+def test_vendor_update_changes_details_prices_and_hides_deselected_products(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+
+        vendor = Vendor(
+            vid="1",
+            vendor_name="Amul Engineering",
+            vendor_prefix="AE",
+            lead_time=4,
+            location="Rajkot",
+            contact="9876543210",
+            email="amul@example.com",
+        )
+        product_one = Product(pid="10", pname="Borcap", category="Petrol Engine")
+        product_two = Product(pid="11", pname="GI Murli connector", category="Petrol Engine")
+        vendor_product_one = VendorProduct(vpid="VP-1", vid="1", pid="10")
+        vendor_product_two = VendorProduct(vpid="VP-2", vid="1", pid="11")
+        sku_one = SKU(
+            skuid="SKU-1",
+            vpid="VP-1",
+            current_buy_rate=Decimal("40.00"),
+            unit_measurement_buy=4,
+            lot_size_buy=2,
+            specs={"spec1": "12mm x 45 mm", "spec2": '1.5"'},
+        )
+        sku_two = SKU(
+            skuid="SKU-2",
+            vpid="VP-2",
+            current_buy_rate=Decimal("26.00"),
+            unit_measurement_buy=3,
+            lot_size_buy=2,
+            specs={"spec1": '1" x 0.75" x 0.75" x 7"'},
+        )
+        db.session.add_all([vendor, product_one, product_two, vendor_product_one, vendor_product_two, sku_one, sku_two])
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.patch(
+        "/api/vendors/1",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Beta Prime Traders",
+            "phone": "9988776655",
+            "email": "beta@example.com",
+            "address": "Shapar, Rajkot",
+            "leadTime": 2,
+            "productIds": ["10"],
+            "prices": [
+                {
+                    "productId": "10",
+                    "specs": {"spec1": "12mm x 45 mm", "spec2": '1.5"'},
+                    "price": "55.50",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()["vendor"]
+    assert payload["name"] == "Beta Prime Traders"
+    assert payload["prefix"] == "BPT"
+    assert payload["leadTime"] == 2
+    assert payload["location"] == "Shapar, Rajkot"
+    assert payload["contact"]["phone"] == "9988776655"
+    assert payload["contact"]["email"] == "beta@example.com"
+    assert payload["parts"] == ["Borcap"]
+    assert payload["priceEntries"][0]["price"] == 55.5
+
+    compare_response = client.get(
+        "/api/vendors/catalog/compare",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert compare_response.status_code == 200
+    compare_payload = compare_response.get_json()["parts"]
+    murli_part = next(part for part in compare_payload if part["id"] == "11")
+    assert murli_part["sizes"] == [
+        {
+            "key": '1" x 0.75" x 0.75" x 7"',
+            "size": '1" x 0.75" x 0.75" x 7"',
+            "spec": "",
+            "specs": {"spec1": '1" x 0.75" x 0.75" x 7"'},
+            "suppliers": [],
+        }
+    ]
+
+    with app.app_context():
+        vendor = Vendor.query.filter_by(vid="1").first()
+        assert vendor is not None
+        assert vendor.vendor_name == "Beta Prime Traders"
+        assert vendor.vendor_prefix == "BPT"
+        assert vendor.lead_time == 2
+        assert vendor.location == "Shapar, Rajkot"
+        assert vendor.contact == "9988776655"
+        assert vendor.email == "beta@example.com"
+
+        updated_sku = SKU.query.filter_by(skuid="SKU-1").first()
+        hidden_sku = SKU.query.filter_by(skuid="SKU-2").first()
+        assert updated_sku is not None
+        assert hidden_sku is not None
+        assert updated_sku.current_buy_rate == Decimal("55.50")
+        assert hidden_sku.current_buy_rate is None
+
+
+def test_vendor_creation_rejects_invalid_phone_numbers(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Invalid Contact Vendor",
+            "phone": "123456789",
+            "email": "invalid@example.com",
+            "address": "Rajkot",
+            "leadTime": 3,
+            "productIds": [],
+            "prices": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Phone number must be 10 digits. +91 in front is okay."
+
+
+def test_vendor_delete_removes_vendor_products_and_skus_when_no_procurement_history(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+
+        vendor = Vendor(
+            vid="1",
+            vendor_name="Delete Me Supplies",
+            vendor_prefix="DMS",
+            location="Rajkot",
+            contact="9876543210",
+            email="delete@example.com",
+        )
+        product = Product(pid="10", pname="Borcap", category="Pipe Fittings")
+        vendor_product = VendorProduct(vpid="VP-1", vid="1", pid="10")
+        sku = SKU(
+            skuid="SKU-1",
+            vpid="VP-1",
+            current_buy_rate=Decimal("12.50"),
+            specs={"spec1": '12mm x 45 mm', "spec2": '1.5"'},
+        )
+        db.session.add_all([vendor, product, vendor_product, sku])
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.delete(
+        "/api/vendors/1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 204
+
+    with app.app_context():
+        assert Vendor.query.filter_by(vid="1").first() is None
+        assert VendorProduct.query.filter_by(vid="1").count() == 0
+        assert SKU.query.filter_by(skuid="SKU-1").first() is None
+
+
+def test_vendor_delete_is_blocked_when_procurement_history_exists(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+
+        vendor = Vendor(
+            vid="1",
+            vendor_name="Amul Engineering",
+            vendor_prefix="AE",
+            location="Rajkot",
+            contact="9876543210",
+            email="amul@example.com",
+        )
+        product = Product(pid="10", pname="Borcap", category="Pipe Fittings")
+        vendor_product = VendorProduct(vpid="VP-1", vid="1", pid="10")
+        sku = SKU(
+            skuid="SKU-1",
+            vpid="VP-1",
+            current_buy_rate=Decimal("12.50"),
+            specs={"spec1": '12mm x 45 mm', "spec2": '1.5"'},
+        )
+        order = VendorOrder(
+            void="VO-TEST001",
+            vid="1",
+            created_by="USR-ADMIN01",
+            order_date=date.today(),
+            status="Confirmed",
+            total_amount=Decimal("125.00"),
+        )
+        detail = VendorOrderDetail(
+            vo_detail_id="VOD-TEST01",
+            void="VO-TEST001",
+            skuid="SKU-1",
+            ordered_qty=10,
+            agree_price=Decimal("12.50"),
+            amount=Decimal("125.00"),
+        )
+        db.session.add_all([vendor, product, vendor_product, sku, order, detail])
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.delete(
+        "/api/vendors/1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Vendor cannot be deleted because procurement history exists."
+
+    with app.app_context():
+        assert Vendor.query.filter_by(vid="1").first() is not None

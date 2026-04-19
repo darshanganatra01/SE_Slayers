@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 
 const partImageModules = import.meta.glob('../customer_dashboard/customer_assets/*.{png,jpg,jpeg,webp,avif,svg}', {
@@ -75,7 +75,8 @@ const normalizeVendor = (vendor = {}) => {
     },
     parts,
     products,
-    partCount: Number(vendor.partCount ?? parts.length ?? 0)
+    partCount: Number(vendor.partCount ?? parts.length ?? 0),
+    priceEntries: Array.isArray(vendor.priceEntries) ? vendor.priceEntries.map(normalizePriceEntry) : []
   }
 }
 
@@ -99,8 +100,25 @@ const normalizeCompareSize = (size = {}) => ({
   key: size.key || size.size || '',
   size: size.size || '—',
   spec: size.spec || '',
+  specs: size.specs && typeof size.specs === 'object' ? { ...size.specs } : {},
   suppliers: Array.isArray(size.suppliers) ? size.suppliers.map(normalizeSupplier) : []
 })
+
+const normalizePriceEntry = (entry = {}) => {
+  const size = entry.size || '—'
+  const spec = entry.spec || ''
+
+  return {
+    productId: String(entry.productId ?? ''),
+    skuId: String(entry.skuId ?? ''),
+    key: entry.key || '',
+    size,
+    spec,
+    specification: entry.specification || [size, spec].filter(Boolean).join(' · '),
+    specs: entry.specs && typeof entry.specs === 'object' ? { ...entry.specs } : {},
+    price: numberOrNull(entry.price)
+  }
+}
 
 const normalizeComparePart = (part = {}) => ({
   id: String(part.id ?? ''),
@@ -167,6 +185,8 @@ export const useVendorStore = defineStore('vendors', {
     selectedDirectoryVendor: null,
     vendorDetailLoading: false,
     vendorDetailError: '',
+    vendorSaving: false,
+    vendorSaveError: '',
     procurements: [],
     procurementLoading: false,
     procurementError: '',
@@ -268,6 +288,69 @@ export const useVendorStore = defineStore('vendors', {
       this.vendorDetailError = ''
     },
 
+    async createVendor(formData) {
+      this.vendorSaving = true
+      this.vendorSaveError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest('/api/vendors', {
+          method: 'POST',
+          body: JSON.stringify(formData)
+        })
+        const vendor = normalizeVendor(payload.vendor || {})
+        await Promise.all([
+          this.fetchVendorDirectory(),
+          this.fetchCompareCatalog()
+        ])
+        this.selectedDirectoryVendor = vendor
+        return vendor
+      } catch (error) {
+        this.vendorSaveError = error.message || 'Unable to save this vendor right now.'
+        throw error
+      } finally {
+        this.vendorSaving = false
+      }
+    },
+
+    async updateVendor(vendorId, formData) {
+      this.vendorSaving = true
+      this.vendorSaveError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(formData)
+        })
+        const vendor = normalizeVendor(payload.vendor || {})
+        await Promise.all([
+          this.fetchVendorDirectory(),
+          this.fetchCompareCatalog()
+        ])
+        this.selectedDirectoryVendor = vendor
+        return vendor
+      } catch (error) {
+        this.vendorSaveError = error.message || 'Unable to update this vendor right now.'
+        throw error
+      } finally {
+        this.vendorSaving = false
+      }
+    },
+
+    async deleteVendor(vendorId) {
+      const authStore = useAuthStore()
+      await authStore.authenticatedRequest(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+        method: 'DELETE'
+      })
+
+      this.directoryVendors = this.directoryVendors.filter((vendor) => vendor.id !== String(vendorId))
+      if (this.selectedDirectoryVendor?.id === String(vendorId)) {
+        this.clearVendorDetails()
+      }
+      await this.fetchCompareCatalog()
+    },
+
     async createProcurement({ skuId, vendorId, lotCount }) {
       this.procurementSubmitting = true
       this.procurementError = ''
@@ -307,3 +390,7 @@ export const useVendorStore = defineStore('vendors', {
     }
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useVendorStore, import.meta.hot))
+}

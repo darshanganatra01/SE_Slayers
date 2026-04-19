@@ -7,6 +7,12 @@
         </svg>
         Back to list
       </button>
+      <div v-if="vendor && !loading" class="vd-actions">
+        <button class="btn btn-primary vd-edit" :disabled="deleting" @click="$emit('edit')">Edit Vendor</button>
+        <button class="vd-delete" :disabled="deleting" @click="$emit('delete')">
+          {{ deleting ? 'Deleting...' : 'Delete Vendor' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="empty-state">
@@ -52,7 +58,7 @@
               <span class="vd-val">{{ vendor.contact.email }}</span>
             </div>
             <div class="fg">
-              <span class="fl">Location</span>
+              <span class="fl">Address</span>
               <span class="vd-val">{{ vendor.location }}</span>
             </div>
             <div class="fg">
@@ -97,14 +103,6 @@
             <span class="vd-placeholder-text">Order history will appear here once connected to backend</span>
           </div>
         </div>
-
-        <div class="vd-section">
-          <div class="vd-section-title">Notes</div>
-          <div class="vd-placeholder">
-            <span class="vd-placeholder-icon">📝</span>
-            <span class="vd-placeholder-text">Add notes about this vendor — coming soon</span>
-          </div>
-        </div>
       </div>
     </template>
   </div>
@@ -116,9 +114,10 @@ export default {
   props: {
     vendor: { type: Object, default: null },
     loading: { type: Boolean, default: false },
-    error: { type: String, default: '' }
+    error: { type: String, default: '' },
+    deleting: { type: Boolean, default: false }
   },
-  emits: ['back'],
+  emits: ['back', 'edit', 'delete'],
   computed: {
     initials() {
       if (!this.vendor) return ''
@@ -159,6 +158,10 @@ export default {
 
 .vd-head {
   margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .vd-back {
   display: inline-flex;
@@ -178,6 +181,43 @@ export default {
 .vd-back:hover {
   border-color: var(--ink-3);
   color: var(--ink);
+}
+
+.vd-edit {
+  flex-shrink: 0;
+}
+
+.vd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vd-delete {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ef4444;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Geist', sans-serif;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.vd-delete:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #dc2626;
+}
+
+.vd-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .vd-profile {
@@ -292,4 +332,5 @@ export default {
   font-size: 12px;
   color: var(--ink-4);
 }
+
 </style>

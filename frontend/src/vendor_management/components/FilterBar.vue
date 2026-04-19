@@ -2,7 +2,7 @@
   <div class="filter-bar">
     <select
       v-if="showLeadTime"
-      class="tb-select"
+      class="tb-select tb-select--lead"
       :value="leadTime"
       @change="$emit('update:leadTime', $event.target.value)"
     >
@@ -12,8 +12,11 @@
       <option value="slow">> 7 days</option>
     </select>
 
-
-    <select class="tb-select" :value="location" @change="$emit('update:location', $event.target.value)">
+    <select
+      class="tb-select tb-select--location"
+      :value="location"
+      @change="$emit('update:location', $event.target.value)"
+    >
       <option value="all">All Locations</option>
       <option v-for="loc in locations" :key="loc" :value="loc">{{ loc }}</option>
     </select>
@@ -37,7 +40,9 @@ export default {
 .filter-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 .tb-select {
   padding: 5px 9px;
@@ -49,6 +54,14 @@ export default {
   outline: none;
   font-family: 'Geist', sans-serif;
   cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+}
+.tb-select--lead {
+  width: 132px;
+}
+.tb-select--location {
+  width: min(220px, 34vw);
 }
 .tb-select option { background: #fff; }
 </style>
