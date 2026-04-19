@@ -3,14 +3,17 @@
 
     <AppTopbar title="Vendors" :meta="headMeta">
       <template #actions>
-        <AppSearchbar v-model="searchQ" placeholder="Search vendors…" />
-        <FilterBar
-          v-if="activeTab === 'list'"
-          v-model:lead-time="filterLeadTime"
-          v-model:location="filterLocation"
-          :locations="uniqueLocations"
-        />
-        <button class="btn btn-primary" @click="openAddVendor">+ Add Vendor</button>
+        <div class="vendor-actions">
+          <AppSearchbar v-model="searchQ" class="vendor-search" placeholder="Search vendors…" />
+          <FilterBar
+            v-if="activeTab === 'list'"
+            class="vendor-filterbar"
+            v-model:lead-time="filterLeadTime"
+            v-model:location="filterLocation"
+            :locations="uniqueLocations"
+          />
+          <button class="btn btn-primary vendor-add-btn" @click="openAddVendor">+ Add Vendor</button>
+        </div>
       </template>
     </AppTopbar>
 
@@ -54,8 +57,10 @@
         :vendor="selectedVendor"
         :loading="store.vendorDetailLoading"
         :error="store.vendorDetailError"
+        :deleting="deletingVendorId === selectedVendor?.id"
         @back="goBackToList"
         @edit="openEditVendor"
+        @delete="handleDeleteVendor"
       />
     </div>
 
@@ -119,6 +124,7 @@
 
 <script>
 import { useVendorStore }  from './store.js'
+import { useAuthStore }    from '../stores/auth'
 import AppTopbar           from '../components/AppTopbar.vue'
 import AppSearchbar        from '../components/AppSearchbar.vue'
 import AppToast            from '../components/AppToast.vue'
@@ -155,6 +161,7 @@ export default {
       selectedVendorId: null,
       selectedProcurementId: null,
       markingReceivedId: null,
+      deletingVendorId: null,
       showVendorModal: false,
       vendorModalMode: 'add',
       vendorModalVendor: null,
@@ -360,6 +367,47 @@ export default {
       }
     },
 
+    async handleDeleteVendor() {
+      const vendor = this.selectedVendor
+      if (!vendor || this.deletingVendorId === vendor.id) return
+
+      const shouldDelete = window.confirm(
+        `Delete ${vendor.name}? This will remove the vendor and its mapped catalog entries.`
+      )
+      if (!shouldDelete) return
+
+      this.deletingVendorId = vendor.id
+      try {
+        await this.deleteVendor(vendor.id)
+        this.$router.push({ name: 'vendors' })
+        this.$refs.toast.show('✓', 'Vendor deleted', vendor.name)
+      } catch (error) {
+        this.$refs.toast.show('!', 'Unable to delete vendor', error.message || 'Please try again')
+      } finally {
+        if (this.deletingVendorId === vendor.id) {
+          this.deletingVendorId = null
+        }
+      }
+    },
+
+    async deleteVendor(vendorId) {
+      if (typeof this.store.deleteVendor === 'function') {
+        await this.store.deleteVendor(vendorId)
+        return
+      }
+
+      const authStore = useAuthStore()
+      await authStore.authenticatedRequest(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+        method: 'DELETE'
+      })
+
+      this.store.directoryVendors = this.store.directoryVendors.filter((vendor) => vendor.id !== String(vendorId))
+      if (this.store.selectedDirectoryVendor?.id === String(vendorId)) {
+        this.store.clearVendorDetails()
+      }
+      await this.store.fetchCompareCatalog()
+    },
+
     handleVendorSelected(selection) {
       this.procurementPrefill = {
         skuId: selection.skuId,
@@ -440,6 +488,27 @@ export default {
 .tab-body    { flex: 1; overflow-y: auto; }
 .tab-list    { padding: 18px 22px; }
 .tab-compare { display: flex; overflow: hidden; }
+.vendor-actions {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vendor-search {
+  flex: 0 1 200px;
+  min-width: 160px;
+}
+.vendor-filterbar {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.vendor-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .vendor-error {
   margin-bottom: 14px;
   padding: 12px 14px;

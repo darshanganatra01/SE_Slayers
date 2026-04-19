@@ -12,32 +12,34 @@
       <div class="es-sub">Try adjusting your search or filters</div>
     </div>
 
-    <table v-else class="vendor-table">
-      <colgroup>
-        <col style="width: 20%" />
-        <col style="width: 28%" />
-        <col style="width: 14%" />
-        <col style="width: 16%" />
-        <col style="width: 22%" />
-      </colgroup>
-      <thead>
-        <tr>
-          <th>Vendor</th>
-          <th>Products Sold</th>
-          <th>Lead Time</th>
-          <th>Location</th>
-          <th>Contact</th>
-        </tr>
-      </thead>
-      <tbody>
-        <VendorRow
-          v-for="vendor in vendors"
-          :key="vendor.id"
-          :vendor="vendor"
-          @select="$emit('select', $event)"
-        />
-      </tbody>
-    </table>
+    <div v-else class="table-scroll">
+      <table class="vendor-table">
+        <colgroup>
+          <col style="width: 20%" />
+          <col style="width: 28%" />
+          <col style="width: 14%" />
+          <col style="width: 16%" />
+          <col style="width: 22%" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Products Sold</th>
+            <th>Lead Time</th>
+            <th>Location</th>
+            <th>Contact</th>
+          </tr>
+        </thead>
+        <tbody>
+          <VendorRow
+            v-for="vendor in vendors"
+            :key="vendor.id"
+            :vendor="vendor"
+            @select="$emit('select', $event)"
+          />
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
@@ -63,8 +65,14 @@ export default {
   overflow: hidden;
 }
 
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .vendor-table {
   width: 100%;
+  min-width: 940px;
   border-collapse: collapse;
 }
 

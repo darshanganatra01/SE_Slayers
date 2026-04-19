@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 
 const partImageModules = import.meta.glob('../customer_dashboard/customer_assets/*.{png,jpg,jpeg,webp,avif,svg}', {
@@ -338,6 +338,19 @@ export const useVendorStore = defineStore('vendors', {
       }
     },
 
+    async deleteVendor(vendorId) {
+      const authStore = useAuthStore()
+      await authStore.authenticatedRequest(`/api/vendors/${encodeURIComponent(vendorId)}`, {
+        method: 'DELETE'
+      })
+
+      this.directoryVendors = this.directoryVendors.filter((vendor) => vendor.id !== String(vendorId))
+      if (this.selectedDirectoryVendor?.id === String(vendorId)) {
+        this.clearVendorDetails()
+      }
+      await this.fetchCompareCatalog()
+    },
+
     async createProcurement({ skuId, vendorId, lotCount }) {
       this.procurementSubmitting = true
       this.procurementError = ''
@@ -377,3 +390,7 @@ export const useVendorStore = defineStore('vendors', {
     }
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useVendorStore, import.meta.hot))
+}

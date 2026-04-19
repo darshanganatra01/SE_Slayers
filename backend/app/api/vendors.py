@@ -28,6 +28,17 @@ def _display_text(value: str | None) -> str:
     return text or "—"
 
 
+def _is_valid_vendor_phone(value: str | None) -> bool:
+    contact = _clean_text(value)
+    if not contact:
+        return True
+
+    digits = re.sub(r"\D", "", contact)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    return len(digits) == 10
+
+
 def _normalize_specs(specs: dict | None) -> dict:
     if not isinstance(specs, dict):
         return {}
@@ -499,6 +510,10 @@ def _parse_vendor_request(payload: dict) -> dict:
     if not name:
         vendors_ns.abort(400, "Vendor name is required.")
 
+    contact = _clean_text(payload.get("phone") or payload.get("contact"))
+    if not _is_valid_vendor_phone(contact):
+        vendors_ns.abort(400, "Phone number must be 10 digits. +91 in front is okay.")
+
     try:
         lead_time = _coerce_lead_time(payload.get("leadTime"))
         product_ids = _parse_product_ids(payload.get("productIds"))
@@ -509,7 +524,7 @@ def _parse_vendor_request(payload: dict) -> dict:
     return {
         "name": name,
         "location": _clean_text(payload.get("address") or payload.get("location")),
-        "contact": _clean_text(payload.get("phone") or payload.get("contact")),
+        "contact": contact,
         "email": _clean_text(payload.get("email")),
         "lead_time": lead_time,
         "product_ids": product_ids,
@@ -581,6 +596,26 @@ class VendorDetailResource(Resource):
         db.session.commit()
 
         return {"vendor": _serialize_vendor_details(vendor)}, 200
+
+    @auth_required("admin")
+    def delete(self, vendor_id: str):
+        vendor = Vendor.query.filter_by(vid=vendor_id).first()
+        if vendor is None:
+            vendors_ns.abort(404, "Vendor not found.")
+
+        has_procurement_history = VendorOrder.query.filter_by(vid=vendor_id).first() is not None
+        if has_procurement_history:
+            vendors_ns.abort(400, "Vendor cannot be deleted because procurement history exists.")
+
+        vendor_products = VendorProduct.query.filter_by(vid=vendor_id).all()
+        for vendor_product in vendor_products:
+            for sku in vendor_product.skus.order_by(SKU.skuid.asc()).all():
+                db.session.delete(sku)
+            db.session.delete(vendor_product)
+
+        db.session.delete(vendor)
+        db.session.commit()
+        return "", 204
 
 
 @vendors_ns.route("/catalog/compare")

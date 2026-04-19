@@ -50,8 +50,10 @@
                 v-model.trim="form.phone"
                 class="fi"
                 type="text"
+                inputmode="tel"
                 placeholder="e.g. +91 98765 43210"
               />
+              <div v-if="phoneError" class="mo-field-error">{{ phoneError }}</div>
             </div>
 
             <div class="fg">
@@ -235,6 +237,20 @@ const buildPrefix = (name = '') => name
   .join('')
   .toUpperCase()
 
+const phoneDigits = (value = '') => {
+  let digits = String(value).replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('91')) {
+    digits = digits.slice(2)
+  }
+  return digits
+}
+
+const isValidPhoneNumber = (value = '') => {
+  const trimmed = String(value).trim()
+  if (!trimmed) return true
+  return phoneDigits(trimmed).length === 10
+}
+
 export default {
   name: 'AddVendorModal',
   props: {
@@ -288,11 +304,16 @@ export default {
     prefixPreview() {
       return buildPrefix(this.form.name)
     },
+    phoneError() {
+      return isValidPhoneNumber(this.form.phone)
+        ? ''
+        : 'Phone number must be 10 digits. +91 in front is okay.'
+    },
     canContinue() {
-      return Boolean(this.form.name.trim())
+      return Boolean(this.form.name.trim()) && !this.phoneError
     },
     canSubmit() {
-      return Boolean(this.form.name.trim())
+      return Boolean(this.form.name.trim()) && !this.phoneError
     },
     submitLabel() {
       return this.mode === 'edit' ? 'Update Vendor' : 'Save Vendor'
@@ -529,6 +550,12 @@ export default {
   font-weight: 600;
   letter-spacing: 0.6px;
   text-transform: uppercase;
+}
+
+.mo-field-error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #dc2626;
 }
 
 .mo-textarea {

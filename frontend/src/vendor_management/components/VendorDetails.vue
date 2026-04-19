@@ -7,7 +7,12 @@
         </svg>
         Back to list
       </button>
-      <button v-if="vendor && !loading" class="btn btn-primary vd-edit" @click="$emit('edit')">Edit Vendor</button>
+      <div v-if="vendor && !loading" class="vd-actions">
+        <button class="btn btn-primary vd-edit" :disabled="deleting" @click="$emit('edit')">Edit Vendor</button>
+        <button class="vd-delete" :disabled="deleting" @click="$emit('delete')">
+          {{ deleting ? 'Deleting...' : 'Delete Vendor' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="empty-state">
@@ -109,9 +114,10 @@ export default {
   props: {
     vendor: { type: Object, default: null },
     loading: { type: Boolean, default: false },
-    error: { type: String, default: '' }
+    error: { type: String, default: '' },
+    deleting: { type: Boolean, default: false }
   },
-  emits: ['back', 'edit'],
+  emits: ['back', 'edit', 'delete'],
   computed: {
     initials() {
       if (!this.vendor) return ''
@@ -179,6 +185,39 @@ export default {
 
 .vd-edit {
   flex-shrink: 0;
+}
+
+.vd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vd-delete {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ef4444;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Geist', sans-serif;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.vd-delete:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #dc2626;
+}
+
+.vd-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .vd-profile {

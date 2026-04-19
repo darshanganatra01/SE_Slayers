@@ -601,3 +601,119 @@ def test_vendor_update_changes_details_prices_and_hides_deselected_products(clie
         assert hidden_sku is not None
         assert updated_sku.current_buy_rate == Decimal("55.50")
         assert hidden_sku.current_buy_rate is None
+
+
+def test_vendor_creation_rejects_invalid_phone_numbers(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Invalid Contact Vendor",
+            "phone": "123456789",
+            "email": "invalid@example.com",
+            "address": "Rajkot",
+            "leadTime": 3,
+            "productIds": [],
+            "prices": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Phone number must be 10 digits. +91 in front is okay."
+
+
+def test_vendor_delete_removes_vendor_products_and_skus_when_no_procurement_history(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+
+        vendor = Vendor(
+            vid="1",
+            vendor_name="Delete Me Supplies",
+            vendor_prefix="DMS",
+            location="Rajkot",
+            contact="9876543210",
+            email="delete@example.com",
+        )
+        product = Product(pid="10", pname="Borcap", category="Pipe Fittings")
+        vendor_product = VendorProduct(vpid="VP-1", vid="1", pid="10")
+        sku = SKU(
+            skuid="SKU-1",
+            vpid="VP-1",
+            current_buy_rate=Decimal("12.50"),
+            specs={"spec1": '12mm x 45 mm', "spec2": '1.5"'},
+        )
+        db.session.add_all([vendor, product, vendor_product, sku])
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.delete(
+        "/api/vendors/1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 204
+
+    with app.app_context():
+        assert Vendor.query.filter_by(vid="1").first() is None
+        assert VendorProduct.query.filter_by(vid="1").count() == 0
+        assert SKU.query.filter_by(skuid="SKU-1").first() is None
+
+
+def test_vendor_delete_is_blocked_when_procurement_history_exists(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+
+        vendor = Vendor(
+            vid="1",
+            vendor_name="Amul Engineering",
+            vendor_prefix="AE",
+            location="Rajkot",
+            contact="9876543210",
+            email="amul@example.com",
+        )
+        product = Product(pid="10", pname="Borcap", category="Pipe Fittings")
+        vendor_product = VendorProduct(vpid="VP-1", vid="1", pid="10")
+        sku = SKU(
+            skuid="SKU-1",
+            vpid="VP-1",
+            current_buy_rate=Decimal("12.50"),
+            specs={"spec1": '12mm x 45 mm', "spec2": '1.5"'},
+        )
+        order = VendorOrder(
+            void="VO-TEST001",
+            vid="1",
+            created_by="USR-ADMIN01",
+            order_date=date.today(),
+            status="Confirmed",
+            total_amount=Decimal("125.00"),
+        )
+        detail = VendorOrderDetail(
+            vo_detail_id="VOD-TEST01",
+            void="VO-TEST001",
+            skuid="SKU-1",
+            ordered_qty=10,
+            agree_price=Decimal("12.50"),
+            amount=Decimal("125.00"),
+        )
+        db.session.add_all([vendor, product, vendor_product, sku, order, detail])
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.delete(
+        "/api/vendors/1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Vendor cannot be deleted because procurement history exists."
+
+    with app.app_context():
+        assert Vendor.query.filter_by(vid="1").first() is not None
