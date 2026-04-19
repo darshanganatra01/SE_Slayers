@@ -56,6 +56,17 @@ class ProductList(Resource):
         return results, 200
 
 
+@customer_ns.route('/categories')
+class ProductCategoryList(Resource):
+    def get(self):
+        """Fetch all unique product categories"""
+        categories = db.session.query(Product.category).distinct().all()
+        # categories is a list of tuples: [('Plumbing',), ('Hardware',), (None,)]
+        result = [c[0] for c in categories if c[0] and c[0].strip()]
+        return sorted(result), 200
+
+
+
 @customer_ns.route('/products/<string:pid>')
 class ProductDetail(Resource):
     def get(self, pid):
@@ -431,8 +442,16 @@ class CustomerOrders(Resource):
                 db.session.add(order_detail)
                 
             new_order.total_amount = total_order_amount
-            
             db.session.commit()
+            
+            # TRIGGER ASYNC THRESHOLD RECALCULATION
+            import threading
+            from flask import current_app
+            from app.api.demand_forecast import update_all_sku_thresholds
+            
+            app_obj = current_app._get_current_object()
+            threading.Thread(target=update_all_sku_thresholds, args=(app_obj,)).start()
+            
             return {"message": "Order placed successfully", "order_id": order_id}, 201
             
         except Exception as e:

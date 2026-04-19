@@ -25,7 +25,7 @@
 
     <div class="mb-6 flex flex-wrap gap-2">
       <Button
-        v-for="cat in categories"
+        v-for="cat in allCategories"
         :key="cat"
         :variant="activeCategory === cat ? 'default' : 'outline'"
         size="sm"
@@ -34,6 +34,7 @@
         {{ cat }}
       </Button>
     </div>
+
 
     <div v-if="filtered.length > 0" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       <ProductCard
@@ -51,8 +52,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { categories } from '@cd/data/mockData' // keep categories mock for now
-import { fetchProducts } from '@cd/data/api'
+import { fetchProducts, fetchCategories } from '@cd/data/api'
 import type { Product } from '@cd/types'
 import ProductCard from '@cd/components/ProductCard.vue'
 import Button from '@cd/components/ui/Button.vue'
@@ -64,15 +64,23 @@ const authStore = useAuthStore()
 const activeCategory = ref('All')
 const searchQuery = ref('')
 const products = ref<Product[]>([])
+const categories = ref<string[]>([])
+
+const allCategories = computed(() => ['All', ...categories.value])
 
 onMounted(async () => {
   try {
-    const data = await fetchProducts()
-    products.value = data
+    const [productsData, categoriesData] = await Promise.all([
+      fetchProducts(),
+      fetchCategories()
+    ])
+    products.value = productsData
+    categories.value = categoriesData
   } catch (err) {
-    console.error("Failed to load products", err)
+    console.error("Failed to load catalog data", err)
   }
 })
+
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
