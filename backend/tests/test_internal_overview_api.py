@@ -198,8 +198,8 @@ class TestOverviewEndpoint:
         assert payload["metrics"]["lowStock"] == 2  # SKU-LOW and SKU-ZERO
         assert len(payload["lowStockItems"]) == 2
 
-    def test_quarterly_revenue_sums_recent_payments(self, client, app):
-        """Quarterly revenue should sum all payments within the last 90 days."""
+    def test_quarterly_revenue_sums_shipped_invoices(self, client, app):
+        """Quarterly revenue should sum invoice amounts for shipped goods within the last 90 days."""
         with app.app_context():
             admin = _admin()
             cust_user = _customer_user()
@@ -225,32 +225,46 @@ class TestOverviewEndpoint:
                 psd_id="PSD-001", pslip_id="PS-001",
                 skuid="SKU-1", packed_qty=20,
             )
+            # Recent invoice (within 90 days) — shipped
             inv = CustomerInvoice(
                 cinv_id="INV-001", pslip_id="PS-001",
                 created_by="USR-ADMIN01", invoice_date=date.today(),
-                status="Paid", total_amount=Decimal("1000"),
+                status="Unpaid", total_amount=Decimal("1000"),
             )
-            db.session.add_all([order, detail, slip, slip_d, inv])
-
-            # Recent payment (within 90 days)
-            p1 = Payment(
-                payment_id="PAY-001", cinv_id="INV-001",
-                recorded_by="USR-ADMIN01", payment_date=date.today(),
-                amount=Decimal("600"), method="Cash",
+            # Old invoice (over 90 days ago) — shipped but old
+            old_order = CustomerOrder(
+                coid="CO-002", cid="C-001", created_by="USR-ADMIN01",
+                order_date=date.today() - timedelta(days=120), status="Completed",
+                total_amount=Decimal("500"),
             )
-            # Old payment (over 90 days ago)
-            p2 = Payment(
-                payment_id="PAY-002", cinv_id="INV-001",
-                recorded_by="USR-ADMIN01", payment_date=date.today() - timedelta(days=100),
-                amount=Decimal("400"), method="Cash",
+            old_detail = CustomerOrderDetail(
+                codid="COD-002", coid="CO-002", skuid="SKU-1",
+                quantity=10, amount=Decimal("500"),
             )
-            db.session.add_all([p1, p2])
+            old_slip = PackingSlip(
+                pslip_id="PS-002", coid="CO-002",
+                packed_by="USR-ADMIN01", packed_date=date.today() - timedelta(days=100),
+                status="Shipped",
+            )
+            old_slip_d = PackingSlipDetail(
+                psd_id="PSD-002", pslip_id="PS-002",
+                skuid="SKU-1", packed_qty=10,
+            )
+            old_inv = CustomerInvoice(
+                cinv_id="INV-002", pslip_id="PS-002",
+                created_by="USR-ADMIN01",
+                invoice_date=date.today() - timedelta(days=100),
+                status="Unpaid", total_amount=Decimal("500"),
+            )
+            db.session.add_all([order, detail, slip, slip_d, inv,
+                                old_order, old_detail, old_slip, old_slip_d, old_inv])
             db.session.commit()
 
         response = client.get("/api/internal-portal/overview")
 
         assert response.status_code == 200
-        assert response.get_json()["metrics"]["quarterlyRevenue"] == 600.0
+        # Only the recent invoice (1000) should count; old one (500) is outside 90 days
+        assert response.get_json()["metrics"]["quarterlyRevenue"] == 1000.0
 
     def test_overdue_invoices_calculated_from_acp(self, client, app):
         """Invoices outstanding beyond customer ACP should be flagged as overdue."""

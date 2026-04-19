@@ -10,7 +10,8 @@ class Payment(db.Model):
     __tablename__ = "payments"
 
     payment_id   = db.Column(db.String, primary_key=True)
-    cinv_id      = db.Column(db.String, db.ForeignKey("customer_invoices.cinv_id"), nullable=False)
+    cinv_id      = db.Column(db.String, db.ForeignKey("customer_invoices.cinv_id"), nullable=True)
+    coid         = db.Column(db.String, db.ForeignKey("customer_orders.coid"), nullable=True)
     recorded_by  = db.Column(db.String, db.ForeignKey("users.uid"),                 nullable=False)
     payment_date = db.Column(db.Date,   nullable=False)
     amount       = db.Column(db.Numeric(10, 2), nullable=False)
@@ -20,6 +21,7 @@ class Payment(db.Model):
 
     # ── Relationships ─────────────────────────────────────────────
     customer_invoice = db.relationship("CustomerInvoice", back_populates="payments")
+    customer_order   = db.relationship("CustomerOrder", backref="payments")
     recorder         = db.relationship("User",            back_populates="payments")
 
     def __repr__(self) -> str:

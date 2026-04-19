@@ -42,25 +42,48 @@
     <!-- Board -->
     <div class="board">
       <div class="priority-columns">
-        <div v-for="priority in ['High', 'Medium', 'Low']" :key="priority" 
+        <div v-for="priority in visiblePriorities" :key="priority"
              class="p-col">
           <!-- Column header -->
           <div class="col-header">
             <div class="col-header-dot" :style="{ background: PC[priority] }"></div>
             <div class="col-header-label">{{ priority }} Priority</div>
-            <div class="col-header-count">{{ ordersByPriority(priority).length }}</div>
+            <div class="col-header-count">{{ getColumnCards(priority).length }}</div>
           </div>
-          
-          <!-- Empty state -->
-          <div v-if="ordersByPriority(priority).length === 0" class="empty-state">
-            <div class="es-icon" style="opacity:0.3;font-size:24px">📭</div>
-            <div class="es-sub">Empty</div>
-          </div>
-          
-          <!-- Cards grid -->
+
+          <!-- Draggable area (disabled for shipped tab) -->
+          <draggable
+            v-if="activeStatus !== 'shipped'"
+            class="cards-list"
+            :list="getColumnCards(priority)"
+            :group="dragGroup"
+            item-key="id"
+            :animation="200"
+            ghost-class="drag-ghost"
+            drag-class="drag-active"
+            :data-priority="priority"
+            @end="onDragEnd($event, priority)"
+          >
+            <template #item="{ element, index }">
+              <OrderCard
+                :order="element"
+                :selected="selectedId === element.id"
+                :style="{ animationDelay: index * 0.04 + 's' }"
+                @select="selectedId = $event"
+              />
+            </template>
+          </draggable>
+
+          <!-- Non-draggable fallback for shipped tab -->
           <div v-else class="cards-list">
+            <template v-if="getColumnCards(priority).length === 0">
+              <div class="empty-state">
+                <div class="es-icon" style="opacity:0.3;font-size:24px">📭</div>
+                <div class="es-sub">Empty</div>
+              </div>
+            </template>
             <OrderCard
-              v-for="(order, i) in ordersByPriority(priority)"
+              v-for="(order, i) in getColumnCards(priority)"
               :key="order.id"
               :order="order"
               :selected="selectedId === order.id"
@@ -104,10 +127,11 @@ import OrderCard        from './components/OrderCard.vue'
 import OrderDetailPanel from './components/OrderDetailPanel.vue'
 import NewOrderModal    from './components/NewOrderModal.vue'
 import StockBar         from './components/StockBar.vue'
+import draggable        from 'vuedraggable'
 
 export default {
   name: 'OrderManagement',
-  components: { AppTopbar, AppSearchbar, AppToast, OrderCard, OrderDetailPanel, NewOrderModal, StockBar },
+  components: { AppTopbar, AppSearchbar, AppToast, OrderCard, OrderDetailPanel, NewOrderModal, StockBar, draggable },
 
   setup() {
     const store = useOrderStore()
@@ -126,6 +150,8 @@ export default {
       searchQ:      '',
       priFilter:    'all',
       showModal:    false,
+      // Column card caches — one reactive list per priority per status
+      columnCards: { High: [], Medium: [], Low: [] },
       tabs: [
         { status: 'inprocess', label: 'In Progress', color: '#2563eb' },
         { status: 'packed',    label: 'Packed',      color: '#d97706' },
@@ -147,7 +173,7 @@ export default {
     visibleOrders() {
       // Touch items deeply so qty changes trigger re-render
       this.store.orders.forEach(o => o.items.forEach(it => it.qty))
-      
+
       let list = this.store.byStatus(this.activeStatus)
       if (this.searchQ) {
         const q = this.searchQ.toLowerCase()
@@ -156,11 +182,29 @@ export default {
           o.id.toLowerCase().includes(q)
         )
       }
-      if (this.priFilter !== 'all') {
-        list = list.filter(o => o.priority === this.priFilter)
-      }
+      // Note: priFilter is used to control which columns are visible, not to filter the list
       return list
+    },
+    visiblePriorities() {
+      if (this.priFilter !== 'all') return [this.priFilter]
+      return ['High', 'Medium', 'Low']
+    },
+    dragGroup() {
+      // When filtering to a single column, disable cross-drag
+      return this.priFilter !== 'all'
+        ? { name: 'orders', pull: false, put: false }
+        : 'orders'
     }
+  },
+
+  watch: {
+    visibleOrders: {
+      handler() { this.rebuildColumnCards() },
+      deep: true,
+      immediate: true
+    },
+    priFilter() { this.rebuildColumnCards() },
+    activeStatus() { this.rebuildColumnCards() }
   },
 
   methods: {
@@ -169,15 +213,50 @@ export default {
       this.selectedId = null
     },
 
-    ordersByPriority(priority) {
-      return this.visibleOrders.filter(o => o.priority === priority)
+    rebuildColumnCards() {
+      const priorities = ['High', 'Medium', 'Low']
+      for (const p of priorities) {
+        const filtered = this.visibleOrders.filter(o => o.priority === p)
+        // Preserve the existing array reference so draggable can mutate it
+        this.columnCards[p].splice(0, this.columnCards[p].length, ...filtered)
+      }
+    },
+
+    getColumnCards(priority) {
+      return this.columnCards[priority]
+    },
+
+    onDragEnd(event, targetPriority) {
+      const { from, to, item, oldIndex, newIndex } = event
+      const fromPriority = from.dataset?.priority || from.getAttribute('data-priority')
+      const toPriority = to.dataset?.priority || to.getAttribute('data-priority')
+
+      if (!fromPriority || !toPriority) return
+
+      if (fromPriority === toPriority) {
+        // Vertical reorder — send the new ordering for this column
+        const cards = this.columnCards[toPriority]
+        this.store.reorderColumn(this.activeStatus, toPriority, cards)
+      } else {
+        // Cross-column drag
+        const cardId = this.columnCards[toPriority][newIndex]?.id
+        if (cardId) {
+          this.store.crossDrag(
+            cardId,
+            this.activeStatus,
+            fromPriority,
+            toPriority,
+            newIndex
+          )
+        }
+      }
     },
 
 // In management.vue — replace handlePromote with this:
 
     async handlePromote({ id, newStatus, transport, updatedItems }) {
       const success = await this.store.promote(id, newStatus, transport, updatedItems)
-      
+
       if (success) {
         if (newStatus === 'packed') {
           this.$refs.toast.show('📦', `${id} → Packed`, 'Quantities confirmed')
@@ -277,4 +356,23 @@ export default {
 .col-header-count  { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-4); }
 
 .empty-state       { opacity: 0.5; margin-top: 20px; }
+
+/* ── Drag-and-drop styles ── */
+.drag-ghost {
+  opacity: 0.35;
+  border: 2px dashed var(--blue) !important;
+  border-radius: 8px;
+  background: var(--surface) !important;
+}
+.drag-active {
+  box-shadow: 0 8px 28px rgba(0,0,0,.18) !important;
+  transform: rotate(1.5deg) scale(1.03) !important;
+  z-index: 100;
+  cursor: grabbing !important;
+}
+/* Make columns highlight when a card is being dragged over */
+.p-col:has(.cards-list.sortable-chosen) {
+  border-color: var(--blue);
+  background: rgba(37,99,235,.02);
+}
 </style>

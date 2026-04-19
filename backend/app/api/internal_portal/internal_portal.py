@@ -10,8 +10,12 @@ from app.models.product import Product
 from app.models.packing_slip import PackingSlip, PackingSlipDetail
 from app.models.customer_invoice import CustomerInvoice, CustomerInvDetail
 from app.models.payment import Payment
+from app.models.order_board_ranking import (
+    HighPriorityRanking, MediumPriorityRanking, LowPriorityRanking, RANKING_MODELS
+)
 from flask import request
 import uuid
+import re as re_mod
 from datetime import date
 
 internal_ns = Namespace("internal-portal", description="Internal Portal operations")
@@ -73,10 +77,18 @@ class InternalOverviewResource(Resource):
         
         low_stock_count = len(low_stock_skus)
 
-        # 4. Quarterly revenue
+        # 4. Quarterly revenue – based on shipped invoices, not payments collected
         three_months_ago = date.today() - timedelta(days=90)
-        payments = db.session.query(Payment).filter(Payment.payment_date >= three_months_ago).all()
-        quarterly_revenue = sum(float(p.amount) for p in payments)
+        shipped_invoices = (
+            db.session.query(CustomerInvoice)
+            .join(PackingSlip, CustomerInvoice.pslip_id == PackingSlip.pslip_id)
+            .filter(
+                PackingSlip.status == "Shipped",
+                CustomerInvoice.invoice_date >= three_months_ago,
+            )
+            .all()
+        )
+        quarterly_revenue = sum(float(inv.total_amount or 0) for inv in shipped_invoices)
 
         # 5. Overdue alert
         invoices = db.session.query(CustomerInvoice).all()
@@ -295,7 +307,8 @@ class InternalOrdersResource(Resource):
                 orders_data.append({
                     "id": order.coid, "status": "inprocess", "order": status_bucket_counts["inprocess"],
                     "customer": customer_name, "custType": cust_type, "priority": priority,
-                    "value": f"₹{ip_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": ip_items
+                    "value": f"₹{ip_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": ip_items,
+                    "rank": 9999
                 })
                 status_bucket_counts["inprocess"] += 1
 
@@ -317,7 +330,8 @@ class InternalOrdersResource(Resource):
                     "id": f"{order.coid}-P", "status": "packed", "order": status_bucket_counts["packed"],
                     "customer": customer_name, "custType": cust_type, "priority": priority,
                     "value": f"₹{p_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": p_items,
-                    "pslip_ids": packing_slips_ids
+                    "pslip_ids": packing_slips_ids,
+                    "rank": 9999
                 })
                 status_bucket_counts["packed"] += 1
 
@@ -354,9 +368,24 @@ class InternalOrdersResource(Resource):
                     "customer": customer_name, "custType": cust_type, "priority": priority,
                     "value": f"₹{s_value:,.2f}", "placedOn": date_str, "shop": shop_name, "items": s_items,
                     "cinv_ids": cinv_ids,
-                    "is_received": all_received
+                    "is_received": all_received,
+                    "rank": 9999
                 })
                 status_bucket_counts["shipped"] += 1
+
+        # ── Apply persisted rankings from the 3 priority tables ──
+        for card in orders_data:
+            card_id = card["id"]
+            card_status = card["status"]
+            # Check each ranking table for this card
+            for pri_name, Model in RANKING_MODELS.items():
+                row = db.session.query(Model).filter_by(
+                    coid=card_id, status=card_status
+                ).first()
+                if row is not None:
+                    card["priority"] = pri_name
+                    card["rank"] = row.rank
+                    break
 
         return {"orders": orders_data, "inventory": inventory_data}, 200
 
@@ -692,25 +721,21 @@ class InternalCustomersResource(Resource):
                 
                 # Collect invoices for this order
                 order_invs = []
-                for slip in o.packing_slips:
+                for slip in o.packing_slips.all():
                     for inv in slip.invoices.all():
                         inv._assoc_order = o.coid
                         invoices.append(inv)
                         order_invs.append(inv)
                 order_invoices_map[o.coid] = order_invs
                 
-                # Derive paid status from actual invoice payments
+                # Derive paid status by comparing total order value to sum of ALL its payments (advance + invoices)
+                order_paid_amt = sum(float(p.amount) for p in Payment.query.filter_by(coid=o.coid).all())
+                for inv in order_invs:
+                    order_paid_amt += sum(float(p.amount) for p in inv.payments.all())
+                
                 status_mapped = "Pending"
-                if order_invs:
-                    all_paid = True
-                    for inv in order_invs:
-                        inv_total = float(inv.total_amount or 0)
-                        paid_amt = sum(float(p.amount) for p in inv.payments.all())
-                        if inv_total <= 0 or paid_amt < inv_total:
-                            all_paid = False
-                            break
-                    if all_paid:
-                        status_mapped = "Paid"
+                if val > 0 and order_paid_amt >= (val - 0.01):
+                    status_mapped = "Paid"
                 elif o.status == "Completed":
                     status_mapped = "Paid"
                 
@@ -722,6 +747,31 @@ class InternalCustomersResource(Resource):
                     "paid": status_mapped
                 })
             
+            # Use total_value and sum of ALL payments for this customer's orders to calculate pending
+            total_paid_customer = 0.0
+            
+            for o in orders:
+                # 1. Direct payments to order
+                for p in Payment.query.filter_by(coid=o.coid).all():
+                    total_paid_customer += float(p.amount)
+                    c_data["payHistory"].append({
+                        "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
+                        "type": "payment",
+                        "amount": float(p.amount),
+                        "note": p.notes or f"Paid for {o.coid}"
+                    })
+                # 2. Payments via invoices
+                for slip in o.packing_slips.all():
+                    for inv in slip.invoices.all():
+                        for p in inv.payments.all():
+                            total_paid_customer += float(p.amount)
+                            c_data["payHistory"].append({
+                                "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
+                                "type": "payment",
+                                "amount": float(p.amount),
+                                "note": p.notes or f"Paid for {inv.cinv_id}"
+                            })
+
             for inv in invoices:
                 inv_total = float(inv.total_amount or 0)
                 paid_amount = sum(float(p.amount) for p in inv.payments.all())
@@ -730,9 +780,6 @@ class InternalCustomersResource(Resource):
                 if getattr(inv, "status", "") == "Overdue":
                     status = "overdue"
                     
-                if status != "paid":
-                    pending += (inv_total - paid_amount)
-                
                 c_data["invoices"].append({
                     "id": inv.cinv_id,
                     "desc": f"Order {getattr(inv, '_assoc_order', '')}",
@@ -741,14 +788,7 @@ class InternalCustomersResource(Resource):
                     "status": status
                 })
                 
-                for p in inv.payments:
-                    c_data["payHistory"].append({
-                        "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
-                        "type": "payment",
-                        "amount": float(p.amount),
-                        "note": p.notes or f"Paid for {inv.cinv_id}"
-                    })
-
+            pending = total_value - total_paid_customer if total_value > total_paid_customer else 0.0
             c_data["pending"] = round(pending, 2)
             c_data["totalOrders"] = total_orders
             c_data["totalValue"] = round(total_value, 2)
@@ -773,25 +813,32 @@ class CollectPaymentResource(Resource):
             return {"message": "Customer not found."}, 404
             
         orders = CustomerOrder.query.filter_by(cid=cid).all()
-        all_invoices = []
-        for o in orders:
-            for slip in o.packing_slips:
-                all_invoices.extend(slip.invoices.all())
                 
-        # Calculate unpaid amounts
-        unpaid_invs = []
-        for inv in all_invoices:
-            inv_total = float(inv.total_amount or 0)
-            paid_amt = sum(float(p.amount) for p in inv.payments.all())
-            if paid_amt < inv_total:
-                unpaid_invs.append({
-                    "inv": inv,
-                    "unpaid": inv_total - paid_amt,
-                    "date": inv.invoice_date
+        # Calculate unpaid amounts at order level
+        unpaid_orders = []
+        total_pending = 0.0
+        
+        for o in orders:
+            val = sum(float(d.amount or 0) for d in o.details.all())
+            paid_amt = sum(float(p.amount) for p in Payment.query.filter_by(coid=o.coid).all())
+            for slip in o.packing_slips.all():
+                for inv in slip.invoices.all():
+                    paid_amt += sum(float(p.amount) for p in inv.payments.all())
+                    
+            if paid_amt < val:
+                unpaid_amount = val - paid_amt
+                unpaid_orders.append({
+                    "order": o,
+                    "unpaid": unpaid_amount,
+                    "date": o.order_date
                 })
+                total_pending += unpaid_amount
+                
+        if amount > round(total_pending, 2) + 0.01:
+            return {"message": f"Amount (₹{amount:.2f}) exceeds total pending amount (₹{total_pending:.2f})."}, 400
                 
         # Sort FIFO (oldest first)
-        unpaid_invs.sort(key=lambda x: x["date"])
+        unpaid_orders.sort(key=lambda x: x["date"])
         
         rem_amount = amount
         payments_made = []
@@ -802,18 +849,18 @@ class CollectPaymentResource(Resource):
 
         import uuid
         from datetime import date
-        for ui in unpaid_invs:
+        for ui in unpaid_orders:
             if rem_amount <= 0:
                 break
                 
-            inv = ui["inv"]
+            o = ui["order"]
             unpaid = ui["unpaid"]
             pay_amt = min(rem_amount, unpaid)
             
             pay_id = "PAY-" + uuid.uuid4().hex[:6].upper()
             new_payment = Payment(
                 payment_id=pay_id,
-                cinv_id=inv.cinv_id,
+                coid=o.coid,
                 recorded_by=uid,
                 payment_date=date.today(),
                 amount=pay_amt,
@@ -821,7 +868,7 @@ class CollectPaymentResource(Resource):
                 notes=f"FIFO Collection"
             )
             db.session.add(new_payment)
-            payments_made.append({"inv_id": inv.cinv_id, "amount": pay_amt})
+            payments_made.append({"order_id": o.coid, "amount": pay_amt})
             rem_amount -= pay_amt
             
         db.session.commit()
@@ -922,7 +969,10 @@ class CreateOrderResource(Resource):
 
                 sku = SA_SKU.query.get(sku_id)
                 if not sku:
-                    continue
+                    return {"message": f"SKU {sku_id} not found"}, 404
+                if (sku.stock_qty or 0) < qty:
+                    db.session.rollback()
+                    return {"message": f"Insufficient stock for {sku.skuid}. Available: {sku.stock_qty or 0}, Requested: {qty}"}, 400
 
                 sell_rate = float(sku.current_sell_rate) if sku.current_sell_rate else 0.0
                 amount = qty * sell_rate
@@ -951,6 +1001,102 @@ class CreateOrderResource(Resource):
 
             return {"message": "Order created", "order_id": order_id, "total": round(total_amount, 2)}, 201
 
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error: {str(e)}"}, 500
+
+@internal_ns.route("/reorder-cards")
+class ReorderCardsResource(Resource):
+    def post(self):
+        """Persist vertical reorder within a single priority column."""
+        data = request.json
+        status = data.get("status")          # "inprocess" / "packed"
+        priority = data.get("priority")      # "High" / "Medium" / "Low"
+        ordered_coids = data.get("ordered_coids", [])
+
+        if not status or not priority or not ordered_coids:
+            return {"message": "status, priority, and ordered_coids are required"}, 400
+
+        if priority not in RANKING_MODELS:
+            return {"message": f"Invalid priority: {priority}"}, 400
+
+        Model = RANKING_MODELS[priority]
+
+        try:
+            for rank, coid in enumerate(ordered_coids):
+                row = db.session.query(Model).filter_by(
+                    coid=coid, status=status
+                ).first()
+                if row:
+                    row.rank = rank
+                else:
+                    db.session.add(Model(coid=coid, status=status, rank=rank))
+
+            db.session.commit()
+            return {"message": "Reordered successfully"}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error: {str(e)}"}, 500
+
+
+@internal_ns.route("/cross-drag")
+class CrossDragResource(Resource):
+    def post(self):
+        """Move a card between priority columns and re-rank both columns."""
+        data = request.json
+        coid = data.get("coid")
+        status = data.get("status")                # "inprocess" / "packed"
+        from_priority = data.get("from_priority")   # "High" / "Medium" / "Low"
+        to_priority = data.get("to_priority")
+        to_rank = data.get("to_rank", 0)
+
+        if not all([coid, status, from_priority, to_priority]):
+            return {"message": "coid, status, from_priority, to_priority required"}, 400
+
+        if from_priority not in RANKING_MODELS or to_priority not in RANKING_MODELS:
+            return {"message": "Invalid priority value"}, 400
+
+        SrcModel = RANKING_MODELS[from_priority]
+        DstModel = RANKING_MODELS[to_priority]
+
+        try:
+            # 1. Find and remove from source table
+            src_row = db.session.query(SrcModel).filter_by(
+                coid=coid, status=status
+            ).first()
+            old_rank = src_row.rank if src_row else -1
+
+            if src_row:
+                db.session.delete(src_row)
+                db.session.flush()
+
+                # Re-rank source column: decrement ranks above the removed position
+                remaining = db.session.query(SrcModel).filter(
+                    SrcModel.status == status,
+                    SrcModel.rank > old_rank
+                ).all()
+                for r in remaining:
+                    r.rank -= 1
+
+            # 2. Make room in destination column at to_rank
+            shift = db.session.query(DstModel).filter(
+                DstModel.status == status,
+                DstModel.rank >= to_rank
+            ).all()
+            for r in shift:
+                r.rank += 1
+
+            # 3. Insert into destination table
+            db.session.add(DstModel(coid=coid, status=status, rank=to_rank))
+
+            # 4. Update actual order priority (strip -P / -S suffix)
+            real_coid = re_mod.sub(r'-(P|S)$', '', coid)
+            order = db.session.query(CustomerOrder).filter_by(coid=real_coid).first()
+            if order:
+                order.priority = to_priority
+
+            db.session.commit()
+            return {"message": "Cross-drag successful"}, 200
         except Exception as e:
             db.session.rollback()
             return {"message": f"Error: {str(e)}"}, 500
