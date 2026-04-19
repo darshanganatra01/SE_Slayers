@@ -284,11 +284,29 @@ class CustomerOrderDetailResource(Resource):
             sku_id = item["sku"]["skuId"]
             item["deliveredQty"] = total_delivered_by_sku.get(sku_id, 0)
             
+        # Compute dynamic order status
+        all_fulfilled = True
+        any_delivered = False
+        
+        for item in items:
+            if item["deliveredQty"] > 0:
+                any_delivered = True
+            if item["deliveredQty"] < item["orderedQty"]:
+                all_fulfilled = False
+                
+        if any_delivered:
+            if all_fulfilled:
+                computed_status = "Fulfilled"
+            else:
+                computed_status = "Partially Fulfilled"
+        else:
+            computed_status = "Order Confirmed"
+            
         return {
             "order": {
                 "coId": order.coid,
                 "orderDate": order.order_date.isoformat() if order.order_date else "",
-                "status": order.status or "Unknown"
+                "status": computed_status
             },
             "totalAmount": float(order.total_amount) if order.total_amount else 0.0,
             "invoices": invoice_list,
