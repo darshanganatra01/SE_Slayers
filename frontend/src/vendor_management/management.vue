@@ -10,7 +10,7 @@
           v-model:location="filterLocation"
           :locations="uniqueLocations"
         />
-        <button class="btn btn-primary" @click="notifyAddVendorComingSoon">+ Add Vendor</button>
+        <button class="btn btn-primary" @click="openAddVendor">+ Add Vendor</button>
       </template>
     </AppTopbar>
 
@@ -55,6 +55,7 @@
         :loading="store.vendorDetailLoading"
         :error="store.vendorDetailError"
         @back="goBackToList"
+        @edit="openEditVendor"
       />
     </div>
 
@@ -98,6 +99,18 @@
       @submit="handleProcurement"
     />
 
+    <AddVendorModal
+      :visible="showVendorModal"
+      :mode="vendorModalMode"
+      :parts-catalog="store.compareParts"
+      :parts-loading="store.compareLoading"
+      :initial-vendor="vendorModalVendor"
+      :saving="store.vendorSaving"
+      :save-error="store.vendorSaveError"
+      @close="closeVendorModal"
+      @save="handleVendorSave"
+    />
+
     <!-- Toast -->
     <AppToast ref="toast" />
 
@@ -116,13 +129,14 @@ import PartList            from './components/PartList.vue'
 import PartDetailPanel     from './components/PartDetailPanel.vue'
 import ProcurementModal    from './components/ProcurementModal.vue'
 import ProcurementHistory  from './components/ProcurementHistory.vue'
+import AddVendorModal      from './components/AddVendorModal.vue'
 
 export default {
   name: 'VendorManagement',
   components: {
     AppTopbar, AppSearchbar, AppToast, FilterBar,
     VendorTable, VendorDetails, PartList, PartDetailPanel,
-    ProcurementModal, ProcurementHistory
+    ProcurementModal, ProcurementHistory, AddVendorModal
   },
 
   setup() {
@@ -141,6 +155,9 @@ export default {
       selectedVendorId: null,
       selectedProcurementId: null,
       markingReceivedId: null,
+      showVendorModal: false,
+      vendorModalMode: 'add',
+      vendorModalVendor: null,
 
       showProcurement:    false,
       procurementPrefill: null,
@@ -300,8 +317,47 @@ export default {
       this.compareSpecKey = null
     },
 
-    notifyAddVendorComingSoon() {
-      this.$refs.toast.show('+', 'Vendor creation will be added later', 'This screen now uses live vendor data')
+    openAddVendor() {
+      this.store.vendorSaveError = ''
+      this.vendorModalMode = 'add'
+      this.vendorModalVendor = null
+      this.showVendorModal = true
+    },
+
+    openEditVendor() {
+      if (!this.selectedVendor) return
+      this.store.vendorSaveError = ''
+      this.vendorModalMode = 'edit'
+      this.vendorModalVendor = this.selectedVendor
+      this.showVendorModal = true
+    },
+
+    closeVendorModal() {
+      this.store.vendorSaveError = ''
+      this.showVendorModal = false
+      this.vendorModalVendor = null
+    },
+
+    async handleVendorSave(formData) {
+      try {
+        const vendor = this.vendorModalMode === 'edit' && this.vendorModalVendor?.id
+          ? await this.store.updateVendor(this.vendorModalVendor.id, formData)
+          : await this.store.createVendor(formData)
+
+        this.closeVendorModal()
+        this.$router.push({ name: 'vendor-details', params: { vendorId: vendor.id } })
+        this.$refs.toast.show(
+          this.vendorModalMode === 'edit' ? '✓' : '+',
+          this.vendorModalMode === 'edit' ? 'Vendor updated' : 'Vendor added',
+          vendor.name
+        )
+      } catch (error) {
+        this.$refs.toast.show(
+          '!',
+          this.vendorModalMode === 'edit' ? 'Unable to update vendor' : 'Unable to add vendor',
+          error.message || 'Please try again'
+        )
+      }
     },
 
     handleVendorSelected(selection) {

@@ -7,6 +7,7 @@
         </svg>
         Back to list
       </button>
+      <button v-if="vendor && !loading" class="btn btn-primary vd-edit" @click="$emit('edit')">Edit Vendor</button>
     </div>
 
     <div v-if="loading" class="empty-state">
@@ -52,7 +53,7 @@
               <span class="vd-val">{{ vendor.contact.email }}</span>
             </div>
             <div class="fg">
-              <span class="fl">Location</span>
+              <span class="fl">Address</span>
               <span class="vd-val">{{ vendor.location }}</span>
             </div>
             <div class="fg">
@@ -97,14 +98,6 @@
             <span class="vd-placeholder-text">Order history will appear here once connected to backend</span>
           </div>
         </div>
-
-        <div class="vd-section">
-          <div class="vd-section-title">Notes</div>
-          <div class="vd-placeholder">
-            <span class="vd-placeholder-icon">📝</span>
-            <span class="vd-placeholder-text">Add notes about this vendor — coming soon</span>
-          </div>
-        </div>
       </div>
     </template>
   </div>
@@ -118,7 +111,7 @@ export default {
     loading: { type: Boolean, default: false },
     error: { type: String, default: '' }
   },
-  emits: ['back'],
+  emits: ['back', 'edit'],
   computed: {
     initials() {
       if (!this.vendor) return ''
@@ -159,6 +152,10 @@ export default {
 
 .vd-head {
   margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .vd-back {
   display: inline-flex;
@@ -178,6 +175,10 @@ export default {
 .vd-back:hover {
   border-color: var(--ink-3);
   color: var(--ink);
+}
+
+.vd-edit {
+  flex-shrink: 0;
 }
 
 .vd-profile {
@@ -292,4 +293,5 @@ export default {
   font-size: 12px;
   color: var(--ink-4);
 }
+
 </style>
