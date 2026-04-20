@@ -11,3 +11,4 @@ google-genai==1.54.0
 celery==5.5.0
 statsforecast==1.7.8
 pandas
+PyYAML==6.0.2

@@ -58,7 +58,7 @@ export const useOrderStore = defineStore('orders', {
 
     async promote(id, newStatus, transport, updatedItems) {
       const o = this.orders.find(x => x.id === id)
-      if (!o) return
+      if (!o) return { success: false, error: 'Order not found' }
       const old = o.status
 
       if (newStatus === 'packed' && old === 'inprocess') {
@@ -81,13 +81,14 @@ export const useOrderStore = defineStore('orders', {
             throw new Error(errData.message || 'Failed to pack order')
           }
           
+          const data = await res.json()
           // Refresh data to get new status and updated stock/packing slips
           await this.fetchOrders()
-          return true
+          return { success: true, pslip_id: data.pslip_id, status: data.status }
         } catch (e) {
           console.error('Packing failed:', e)
           this.error = e.message
-          return false
+          return { success: false }
         }
 
       } else {
@@ -99,7 +100,7 @@ export const useOrderStore = defineStore('orders', {
           o.transport = transport || 'BlueDart Express'
           o.shippingCost = '₹' + (Math.floor(Math.random() * 400) + 300)
         }
-        return true
+        return { success: true }
       }
     },
 

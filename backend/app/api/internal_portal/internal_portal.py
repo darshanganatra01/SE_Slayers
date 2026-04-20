@@ -63,7 +63,8 @@ class InternalOverviewResource(Resource):
             if o.status not in ["Completed", "Cancelled", "Dispatched"]:
                 pending_orders += 1
                 acp = o.customer.acp if o.customer and o.customer.acp else 30
-                if o.priority == "High" or acp <= 15:
+                priority = o.priority or map_acp_to_priority(acp)
+                if priority == "High":
                     high_priority += 1
 
         # 3. Low stock items
@@ -235,7 +236,7 @@ class InternalOrdersResource(Resource):
             customer_name = customer.customer_name if customer else "Unknown"
             shop_name = customer.company_name if hasattr(customer, "company_name") else customer_name
             acp_val = customer.acp if customer and customer.acp is not None else 30
-            priority = order.priority if order.priority else map_acp_to_priority(acp_val)
+            priority = order.priority or map_acp_to_priority(acp_val)
             cust_type = map_cust_type(priority)
             date_str = order.order_date.strftime("%B %d %Y") if order.order_date else ""
 
@@ -373,19 +374,18 @@ class InternalOrdersResource(Resource):
                 })
                 status_bucket_counts["shipped"] += 1
 
-        # ── Apply persisted rankings from the 3 priority tables ──
+        # ── Apply persisted rankings from the matching priority table ──
         for card in orders_data:
             card_id = card["id"]
             card_status = card["status"]
-            # Check each ranking table for this card
-            for pri_name, Model in RANKING_MODELS.items():
+            card_priority = card["priority"]
+            Model = RANKING_MODELS.get(card_priority)
+            if Model:
                 row = db.session.query(Model).filter_by(
                     coid=card_id, status=card_status
                 ).first()
                 if row is not None:
-                    card["priority"] = pri_name
                     card["rank"] = row.rank
-                    break
 
         return {"orders": orders_data, "inventory": inventory_data}, 200
 
@@ -685,7 +685,6 @@ class InternalCustomersResource(Resource):
         for c in customers:
             total_orders = 0
             total_value = 0.0
-            pending = 0.0
             avg_pay_days = 0 
             
             c_data = {
@@ -708,11 +707,11 @@ class InternalCustomersResource(Resource):
             }
             
             orders = CustomerOrder.query.filter_by(cid=c.cid).all()
+            orders.sort(key=lambda x: x.order_date)
             total_orders = len(orders)
             
-            invoices = []
-            # Collect all invoices per order for payment status lookup
-            order_invoices_map = {}  # coid -> [CustomerInvoice]
+            # ── Step 1: Build orders list (no pending/paid columns) ──
+            all_invoices = []   # flat list of CustomerInvoice across all orders
             for o in orders:
                 val = 0.0
                 for d in o.details:
@@ -720,75 +719,118 @@ class InternalCustomersResource(Resource):
                 total_value += val
                 
                 # Collect invoices for this order
-                order_invs = []
                 for slip in o.packing_slips.all():
                     for inv in slip.invoices.all():
                         inv._assoc_order = o.coid
-                        invoices.append(inv)
-                        order_invs.append(inv)
-                order_invoices_map[o.coid] = order_invs
-                
-                # Derive paid status by comparing total order value to sum of ALL its payments (advance + invoices)
-                order_paid_amt = sum(float(p.amount) for p in Payment.query.filter_by(coid=o.coid).all())
-                for inv in order_invs:
-                    order_paid_amt += sum(float(p.amount) for p in inv.payments.all())
-                
-                status_mapped = "Pending"
-                if val > 0 and order_paid_amt >= (val - 0.01):
-                    status_mapped = "Paid"
-                elif o.status == "Completed":
-                    status_mapped = "Paid"
+                        all_invoices.append(inv)
                 
                 c_data["orders"].append({
                     "id": o.coid,
                     "date": o.order_date.strftime("%b %d") if o.order_date else "",
                     "value": round(val, 2),
-                    "status": o.status or "In-Process",
-                    "paid": status_mapped
+                    "status": o.status or "In-Process"
                 })
             
-            # Use total_value and sum of ALL payments for this customer's orders to calculate pending
+            # ── Step 2: Gather ALL unique payments for this customer ──
             total_paid_customer = 0.0
+            processed_customer_payments = set()
             
             for o in orders:
-                # 1. Direct payments to order
+                # Direct payments to order
                 for p in Payment.query.filter_by(coid=o.coid).all():
-                    total_paid_customer += float(p.amount)
-                    c_data["payHistory"].append({
-                        "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
-                        "type": "payment",
-                        "amount": float(p.amount),
-                        "note": p.notes or f"Paid for {o.coid}"
-                    })
-                # 2. Payments via invoices
+                    if p.payment_id not in processed_customer_payments:
+                        total_paid_customer += float(p.amount)
+                        processed_customer_payments.add(p.payment_id)
+                        c_data["payHistory"].append({
+                            "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
+                            "type": "payment",
+                            "amount": float(p.amount),
+                            "note": p.notes or f"Paid for {o.coid}"
+                        })
+                # Payments via invoices
                 for slip in o.packing_slips.all():
                     for inv in slip.invoices.all():
                         for p in inv.payments.all():
-                            total_paid_customer += float(p.amount)
-                            c_data["payHistory"].append({
-                                "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
-                                "type": "payment",
-                                "amount": float(p.amount),
-                                "note": p.notes or f"Paid for {inv.cinv_id}"
-                            })
+                            if p.payment_id not in processed_customer_payments:
+                                total_paid_customer += float(p.amount)
+                                processed_customer_payments.add(p.payment_id)
+                                c_data["payHistory"].append({
+                                    "date": p.payment_date.strftime("%b %d") if p.payment_date else "",
+                                    "type": "payment",
+                                    "amount": float(p.amount),
+                                    "note": p.notes or f"Paid for {inv.cinv_id}"
+                                })
 
-            for inv in invoices:
-                inv_total = float(inv.total_amount or 0)
-                paid_amount = sum(float(p.amount) for p in inv.payments.all())
+            # ── Step 3: Compute each invoice's effective paid amount ──
+            # 1. Direct invoice payments (payments with cinv_id matching the invoice)
+            # 2. Advance payments for the SAME order (coid matches, cinv_id is NULL)
+            #    distributed FIFO across that order's invoices ONLY — advances
+            #    for Order A must NOT bleed into Order B's invoices.
+            all_invoices.sort(key=lambda x: x.invoice_date)
+            
+            # First, compute each invoice's directly-recorded paid amount
+            inv_direct_paid = {}
+            for inv in all_invoices:
+                paid = sum(float(p.amount) for p in inv.payments.all())
+                inv_direct_paid[inv.cinv_id] = paid
+            
+            # Group invoices by order for per-order advance distribution
+            order_invoices = {}  # coid -> [invoice]
+            for inv in all_invoices:
+                coid = getattr(inv, '_assoc_order', '')
+                order_invoices.setdefault(coid, []).append(inv)
+            
+            # For each order, compute its advance payments and distribute
+            # FIFO across ONLY that order's invoices
+            inv_effective_paid = {}
+            for o in orders:
+                # Compute advance payments for this order (coid set, cinv_id NULL)
+                order_advance = 0.0
+                for p in Payment.query.filter_by(coid=o.coid).all():
+                    if not p.cinv_id:
+                        order_advance += float(p.amount)
                 
-                status = "paid" if (paid_amount >= inv_total and inv_total > 0) else "pending"
-                if getattr(inv, "status", "") == "Overdue":
-                    status = "overdue"
+                # Distribute this order's advances across its invoices (oldest first)
+                remaining_advance = order_advance
+                for inv in order_invoices.get(o.coid, []):
+                    inv_total = float(inv.total_amount or 0)
+                    direct_paid = inv_direct_paid.get(inv.cinv_id, 0.0)
+                    shortfall = max(0, inv_total - direct_paid)
+                    
+                    advance_alloc = 0.0
+                    if remaining_advance > 0 and shortfall > 0:
+                        advance_alloc = min(remaining_advance, shortfall)
+                        remaining_advance -= advance_alloc
+                    
+                    inv_effective_paid[inv.cinv_id] = direct_paid + advance_alloc
+
+            # ── Step 4: Build invoice DTOs with accurate status ──
+            for inv in all_invoices:
+                inv_total = float(inv.total_amount or 0)
+                paid_amount = inv_effective_paid.get(inv.cinv_id, 0.0)
+                
+                status = "Paid" if (inv_total > 0 and round(paid_amount, 2) >= round(inv_total - 0.01, 2)) else "Unpaid"
                     
                 c_data["invoices"].append({
                     "id": inv.cinv_id,
                     "desc": f"Order {getattr(inv, '_assoc_order', '')}",
                     "amount": round(inv_total, 2),
-                    "due": "",
+                    "paid_amount": round(paid_amount, 2),
+                    "pending": round(max(0, inv_total - paid_amount), 2),
+                    "date": inv.invoice_date.strftime("%b %d, %Y") if inv.invoice_date else "",
                     "status": status
                 })
                 
-            pending = total_value - total_paid_customer if total_value > total_paid_customer else 0.0
+            # ── Step 5: Customer-level pending ──
+            # Pending = sum of unpaid amounts across all invoices ONLY.
+            # Orders that haven't been invoiced yet don't count as "pending"
+            # because there's nothing to collect until an invoice is raised.
+            pending = 0.0
+            for inv in all_invoices:
+                inv_total = float(inv.total_amount or 0)
+                eff_paid = inv_effective_paid.get(inv.cinv_id, 0.0)
+                if round(eff_paid, 2) < round(inv_total - 0.01, 2):
+                    pending += (inv_total - eff_paid)
             c_data["pending"] = round(pending, 2)
             c_data["totalOrders"] = total_orders
             c_data["totalValue"] = round(total_value, 2)
@@ -813,33 +855,69 @@ class CollectPaymentResource(Resource):
             return {"message": "Customer not found."}, 404
             
         orders = CustomerOrder.query.filter_by(cid=cid).all()
-                
-        # Calculate unpaid amounts at order level
-        unpaid_orders = []
-        total_pending = 0.0
         
+        # ── Collect ALL invoices for this customer ──
+        all_invoices = []
         for o in orders:
-            val = sum(float(d.amount or 0) for d in o.details.all())
-            paid_amt = sum(float(p.amount) for p in Payment.query.filter_by(coid=o.coid).all())
             for slip in o.packing_slips.all():
                 for inv in slip.invoices.all():
-                    paid_amt += sum(float(p.amount) for p in inv.payments.all())
-                    
-            if paid_amt < val:
-                unpaid_amount = val - paid_amt
-                unpaid_orders.append({
-                    "order": o,
-                    "unpaid": unpaid_amount,
-                    "date": o.order_date
+                    inv._assoc_coid = o.coid
+                    all_invoices.append(inv)
+        
+        # Sort FIFO: oldest invoice first
+        all_invoices.sort(key=lambda x: x.invoice_date)
+        
+        # ── Compute inv_effective_paid (identical to GET endpoint) ──
+        inv_direct_paid = {}
+        for inv in all_invoices:
+            paid = sum(float(p.amount) for p in inv.payments.all())
+            inv_direct_paid[inv.cinv_id] = paid
+            
+        order_invoices = {}
+        for inv in all_invoices:
+            coid = getattr(inv, '_assoc_coid', '')
+            order_invoices.setdefault(coid, []).append(inv)
+            
+        inv_effective_paid = {}
+        for o in orders:
+            order_advance = 0.0
+            for p in Payment.query.filter_by(coid=o.coid).all():
+                if not p.cinv_id:
+                    order_advance += float(p.amount)
+            
+            remaining_advance = order_advance
+            for inv in order_invoices.get(o.coid, []):
+                inv_total = float(inv.total_amount or 0)
+                direct_paid = inv_direct_paid.get(inv.cinv_id, 0.0)
+                shortfall = max(0, inv_total - direct_paid)
+                
+                advance_alloc = 0.0
+                if remaining_advance > 0 and shortfall > 0:
+                    advance_alloc = min(remaining_advance, shortfall)
+                    remaining_advance -= advance_alloc
+                
+                inv_effective_paid[inv.cinv_id] = direct_paid + advance_alloc
+
+        # ── Find unpaid invoices ──
+        unpaid_invoices = []
+        total_pending = 0.0
+        
+        for inv in all_invoices:
+            inv_total = float(inv.total_amount or 0)
+            eff_paid = inv_effective_paid.get(inv.cinv_id, 0.0)
+            
+            if round(eff_paid, 2) < round(inv_total - 0.01, 2):
+                inv_unpaid = inv_total - eff_paid
+                unpaid_invoices.append({
+                    "invoice": inv,
+                    "unpaid": inv_unpaid,
+                    "coid": inv._assoc_coid
                 })
-                total_pending += unpaid_amount
+                total_pending += inv_unpaid
                 
         if amount > round(total_pending, 2) + 0.01:
-            return {"message": f"Amount (₹{amount:.2f}) exceeds total pending amount (₹{total_pending:.2f})."}, 400
+            return {"message": f"Amount (₹{amount:.2f}) exceeds total pending invoice amount (₹{total_pending:.2f})."}, 400
                 
-        # Sort FIFO (oldest first)
-        unpaid_orders.sort(key=lambda x: x["date"])
-        
         rem_amount = amount
         payments_made = []
         
@@ -849,60 +927,29 @@ class CollectPaymentResource(Resource):
 
         import uuid
         from datetime import date
-        for ui in unpaid_orders:
+        
+        for ui in unpaid_invoices:
             if rem_amount <= 0:
                 break
                 
-            o = ui["order"]
-            unpaid_for_order = ui["unpaid"]
-            pay_amt_for_order = min(rem_amount, unpaid_for_order)
+            inv = ui["invoice"]
+            inv_unpaid = ui["unpaid"]
+            pay_amt = min(rem_amount, inv_unpaid)
             
-            rem_for_order = pay_amt_for_order
+            new_payment = Payment(
+                payment_id="PAY-" + uuid.uuid4().hex[:6].upper(),
+                coid=ui["coid"],
+                cinv_id=inv.cinv_id,
+                recorded_by=uid,
+                payment_date=date.today(),
+                amount=pay_amt,
+                method="Auto-FIFO",
+                notes=f"FIFO Collection (Invoice {inv.cinv_id})"
+            )
+            db.session.add(new_payment)
             
-            # 1. First allocate to invoices
-            order_invs = []
-            for slip in o.packing_slips.all():
-                for inv in slip.invoices.all():
-                    order_invs.append(inv)
-            # sort invoices by date
-            order_invs.sort(key=lambda x: x.invoice_date)
-            
-            for inv in order_invs:
-                if rem_for_order <= 0: break
-                inv_total = float(inv.total_amount or 0)
-                inv_paid = sum(float(p.amount) for p in inv.payments.all())
-                if inv_paid < inv_total:
-                    inv_unpaid = inv_total - inv_paid
-                    pay_inv = min(rem_for_order, inv_unpaid)
-                    
-                    new_payment = Payment(
-                        payment_id="PAY-" + uuid.uuid4().hex[:6].upper(),
-                        coid=o.coid,
-                        cinv_id=inv.cinv_id,
-                        recorded_by=uid,
-                        payment_date=date.today(),
-                        amount=pay_inv,
-                        method="Auto-FIFO",
-                        notes=f"FIFO Collection (Invoice {inv.cinv_id})"
-                    )
-                    db.session.add(new_payment)
-                    rem_for_order -= pay_inv
-                    
-            # 2. Allocate remainder as advance for the order itself
-            if rem_for_order > 0:
-                new_payment = Payment(
-                    payment_id="PAY-" + uuid.uuid4().hex[:6].upper(),
-                    coid=o.coid,
-                    recorded_by=uid,
-                    payment_date=date.today(),
-                    amount=rem_for_order,
-                    method="Auto-FIFO",
-                    notes=f"FIFO Collection (Advance Order {o.coid})"
-                )
-                db.session.add(new_payment)
-                
-            payments_made.append({"order_id": o.coid, "amount": pay_amt_for_order})
-            rem_amount -= pay_amt_for_order
+            payments_made.append({"invoice_id": inv.cinv_id, "order_id": ui["coid"], "amount": pay_amt})
+            rem_amount -= pay_amt
             
         db.session.commit()
         return {
@@ -1003,9 +1050,6 @@ class CreateOrderResource(Resource):
                 sku = SA_SKU.query.get(sku_id)
                 if not sku:
                     return {"message": f"SKU {sku_id} not found"}, 404
-                if (sku.stock_qty or 0) < qty:
-                    db.session.rollback()
-                    return {"message": f"Insufficient stock for {sku.skuid}. Available: {sku.stock_qty or 0}, Requested: {qty}"}, 400
 
                 sell_rate = float(sku.current_sell_rate) if sku.current_sell_rate else 0.0
                 amount = qty * sell_rate

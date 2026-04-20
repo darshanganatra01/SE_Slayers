@@ -255,11 +255,39 @@ export default {
 // In management.vue — replace handlePromote with this:
 
     async handlePromote({ id, newStatus, transport, updatedItems }) {
-      const success = await this.store.promote(id, newStatus, transport, updatedItems)
+      // ── Stock validation before packing ──
+      if (newStatus === 'packed' && updatedItems) {
+        const outOfStock = []
+        for (const ui of updatedItems) {
+          if (ui.qty <= 0) continue
+          // Look up stock from inventory by matching skuid
+          let stockQty = null
+          for (const [key, inv] of Object.entries(this.store.inventory)) {
+            if (key.includes(ui.skuid)) {
+              stockQty = inv.stock
+              break
+            }
+          }
+          // Also check the order's own item inStock flag as fallback
+          if (stockQty !== null && stockQty < ui.qty) {
+            outOfStock.push(`${ui.name} (need ${ui.qty}, have ${stockQty})`)
+          } else if (stockQty === 0) {
+            outOfStock.push(`${ui.name} (out of stock)`)
+          }
+        }
+        if (outOfStock.length > 0) {
+          const productList = outOfStock.join(', ')
+          this.$refs.toast.show('⚠️', 'Insufficient stock', productList, 5000)
+          return
+        }
+      }
 
-      if (success) {
+      const result = await this.store.promote(id, newStatus, transport, updatedItems)
+
+      if (result && result.success) {
         if (newStatus === 'packed') {
-          this.$refs.toast.show('📦', `${id} → Packed`, 'Quantities confirmed')
+          const order = this.store.findById(`${id}-P`) || this.store.findById(id) || { priority: '' }
+          this.$refs.toast.show('📦', `${result.pslip_id} → ${result.status}`, `${id} | ${order.priority} Priority`, 5000)
         } else if (newStatus === 'shipped') {
           this.$refs.toast.show('🚚', `${id} → Shipped`, transport || 'BlueDart Express')
         } else {
@@ -267,7 +295,7 @@ export default {
         }
         this.activeStatus = newStatus
       } else {
-        this.$refs.toast.show('❌', `Update failed`, this.store.error || 'Please try again')
+        this.$refs.toast.show('❌', `Update failed`, (result && result.error) || this.store.error || 'Please try again')
       }
     },
 
