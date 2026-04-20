@@ -11,6 +11,7 @@ from flask_restx import Namespace, Resource
 
 from app import db
 from app.auth import AuthError, auth_required, get_current_user
+from app.catalog_utils import product_image_url
 from app.models.product import Product
 from app.models.sku import SKU
 from app.models.vendor import Vendor, VendorProduct
@@ -57,6 +58,11 @@ def _spec_values(specs: dict | None) -> list[str]:
 
 def _specs_signature(specs: dict | None) -> tuple[str, ...]:
     return tuple(_spec_values(specs))
+
+
+def _exact_specs_signature(specs: dict | None) -> tuple[tuple[str, str], ...]:
+    normalized = _normalize_specs(specs)
+    return tuple(sorted(normalized.items()))
 
 
 def _serialize_vendor(vendor: Vendor) -> dict:
@@ -134,6 +140,15 @@ def _generate_vendor_prefix(name: str) -> str:
     return "".join(parts).upper()
 
 
+def _sku_template_priority(sku: SKU) -> tuple[int, int, int, int]:
+    return (
+        1 if sku.current_sell_rate is not None else 0,
+        1 if (sku.threshold or 0) > 0 else 0,
+        sku.stock_qty or 0,
+        1 if sku.current_buy_rate is not None else 0,
+    )
+
+
 def _append_product(payload: dict, product: Product | None) -> None:
     if product is None or product.pid in payload["_seen_products"]:
         return
@@ -174,6 +189,73 @@ def _finalize_compare_part(payload: dict) -> dict:
 
     payload["sizes"] = size_entries
     return payload
+
+
+def _serialize_compare_search_entry(product: Product, sku: SKU, vendor: Vendor | None) -> dict:
+    normalized_specs = _normalize_specs(sku.specs)
+    price = _format_decimal(sku.current_buy_rate)
+    return {
+        "skuId": str(sku.skuid),
+        "vpid": str(sku.vpid),
+        "pid": str(product.pid),
+        "productId": str(product.pid),
+        "name": product.pname,
+        "image": product_image_url(product.image_filename),
+        "size": _build_size_label(normalized_specs),
+        "spec": _build_spec_label(normalized_specs),
+        "specKey": _build_spec_key(normalized_specs),
+        "specification": _specification_display(normalized_specs),
+        "specs": normalized_specs,
+        "price": price,
+        "currentBuy": price,
+        "unitMeasurementBuy": sku.unit_measurement_buy,
+        "lotSize": sku.lot_size_buy,
+        "vendor": {
+            "id": str(vendor.vid) if vendor is not None else "",
+            "name": vendor.vendor_name if vendor is not None else "Unknown Vendor",
+            "location": _display_text(vendor.location if vendor is not None else None),
+            "leadTime": vendor.lead_time if vendor is not None else None,
+        },
+    }
+
+
+def _serialize_compare_supplier(sku: SKU, vendor: Vendor, *, is_source_sku: bool = False) -> dict:
+    price = _format_decimal(sku.current_buy_rate)
+    return {
+        "vendorId": str(vendor.vid),
+        "skuId": str(sku.skuid),
+        "price": price,
+        "currentBuy": price,
+        "unitMeasurementBuy": sku.unit_measurement_buy,
+        "lotSize": sku.lot_size_buy,
+        "leadTime": vendor.lead_time,
+        "isSourceSku": is_source_sku,
+        "vendor": {
+            "id": str(vendor.vid),
+            "name": vendor.vendor_name,
+            "location": _display_text(vendor.location),
+            "leadTime": vendor.lead_time,
+        },
+    }
+
+
+def _prefer_compare_supplier(existing: dict | None, candidate: dict) -> bool:
+    if existing is None:
+        return True
+
+    existing_price = existing.get("price")
+    candidate_price = candidate.get("price")
+    if existing_price is None and candidate_price is not None:
+        return True
+    if candidate_price is None and existing_price is not None:
+        return False
+    if existing_price is None and candidate_price is None:
+        return candidate.get("isSourceSku") and not existing.get("isSourceSku")
+    if candidate_price < existing_price:
+        return True
+    if candidate_price > existing_price:
+        return False
+    return candidate.get("isSourceSku") and not existing.get("isSourceSku")
 
 
 def _specification_display(specs: dict | None) -> str:
@@ -388,10 +470,10 @@ def _build_product_spec_templates(product_ids: list[str]) -> dict[str, dict[tupl
     templates: dict[str, dict[tuple[str, ...], dict]] = defaultdict(dict)
     for product_id, sku in rows:
         signature = _specs_signature(sku.specs)
-        if not signature or signature in templates[product_id]:
+        if not signature:
             continue
 
-        templates[product_id][signature] = {
+        next_template = {
             "specs": _normalize_specs(sku.specs),
             "unit_measurement_buy": sku.unit_measurement_buy,
             "lot_size_buy": sku.lot_size_buy,
@@ -399,7 +481,15 @@ def _build_product_spec_templates(product_ids: list[str]) -> dict[str, dict[tupl
             "lot_size_sell": sku.lot_size_sell,
             "current_sell_rate": sku.current_sell_rate,
             "threshold": sku.threshold,
+            "_priority": _sku_template_priority(sku),
         }
+        existing_template = templates[product_id].get(signature)
+        if existing_template is None or next_template["_priority"] > existing_template["_priority"]:
+            templates[product_id][signature] = next_template
+
+    for product_templates in templates.values():
+        for template in product_templates.values():
+            template.pop("_priority", None)
 
     return templates
 
@@ -639,7 +729,7 @@ class VendorCompareCatalogResource(Resource):
                 {
                     "id": str(product.pid),
                     "name": product.pname,
-                    "image": None,
+                    "image": product_image_url(product.image_filename),
                     "sizes": [],
                     "_sizes": OrderedDict(),
                 },
@@ -690,6 +780,91 @@ class VendorCompareCatalogResource(Resource):
                 }
 
         return {"parts": [_finalize_compare_part(payload) for payload in parts.values()]}, 200
+
+
+@vendors_ns.route("/catalog/compare/search")
+class VendorCompareSearchCatalogResource(Resource):
+    @auth_required("admin")
+    def get(self):
+        rows = (
+            db.session.query(Product, SKU, Vendor)
+            .join(VendorProduct, VendorProduct.pid == Product.pid)
+            .join(SKU, SKU.vpid == VendorProduct.vpid)
+            .join(Vendor, Vendor.vid == VendorProduct.vid)
+            .order_by(Product.pname.asc(), SKU.skuid.asc())
+            .all()
+        )
+
+        sku_entries = [_serialize_compare_search_entry(product, sku, vendor) for product, sku, vendor in rows]
+        sku_entries.sort(
+            key=lambda entry: (
+                entry["name"].lower(),
+                entry["size"].lower(),
+                entry["spec"].lower(),
+                entry["vendor"]["name"].lower(),
+                entry["skuId"],
+            )
+        )
+
+        return {"skus": sku_entries}, 200
+
+
+@vendors_ns.route("/catalog/compare/search/<string:sku_id>")
+class VendorCompareSearchDetailResource(Resource):
+    @auth_required("admin")
+    def get(self, sku_id: str):
+        source_row = (
+            db.session.query(Product, SKU, VendorProduct, Vendor)
+            .join(VendorProduct, VendorProduct.pid == Product.pid)
+            .join(SKU, SKU.vpid == VendorProduct.vpid)
+            .join(Vendor, Vendor.vid == VendorProduct.vid)
+            .filter(SKU.skuid == sku_id)
+            .first()
+        )
+        if source_row is None:
+            vendors_ns.abort(404, "Selected SKU was not found.")
+
+        product, source_sku, source_vendor_product, source_vendor = source_row
+        source_signature = _exact_specs_signature(source_sku.specs)
+
+        sibling_vpids = [
+            value
+            for (value,) in db.session.query(VendorProduct.vpid)
+            .filter(VendorProduct.pid == source_vendor_product.pid)
+            .all()
+        ]
+
+        supplier_rows = []
+        if sibling_vpids:
+            supplier_rows = (
+                db.session.query(SKU, Vendor)
+                .join(VendorProduct, VendorProduct.vpid == SKU.vpid)
+                .join(Vendor, Vendor.vid == VendorProduct.vid)
+                .filter(VendorProduct.vpid.in_(sibling_vpids))
+                .order_by(Vendor.vendor_name.asc(), SKU.skuid.asc())
+                .all()
+            )
+
+        suppliers_by_vendor: OrderedDict[str, dict] = OrderedDict()
+        for candidate_sku, candidate_vendor in supplier_rows:
+            if _exact_specs_signature(candidate_sku.specs) != source_signature:
+                continue
+            if candidate_sku.current_buy_rate is None:
+                continue
+
+            candidate_payload = _serialize_compare_supplier(
+                candidate_sku,
+                candidate_vendor,
+                is_source_sku=candidate_sku.skuid == source_sku.skuid,
+            )
+            existing_payload = suppliers_by_vendor.get(candidate_vendor.vid)
+            if _prefer_compare_supplier(existing_payload, candidate_payload):
+                suppliers_by_vendor[candidate_vendor.vid] = candidate_payload
+
+        return {
+            "sourceSku": _serialize_compare_search_entry(product, source_sku, source_vendor),
+            "suppliers": _sort_suppliers(list(suppliers_by_vendor.values())),
+        }, 200
 
 
 @vendors_ns.route("/procurements")

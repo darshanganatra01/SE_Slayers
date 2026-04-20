@@ -15,10 +15,7 @@ import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-import pandas as pd
 from flask_restx import Namespace, Resource
-from statsforecast import StatsForecast
-from statsforecast.models import AutoETS
 
 demand_forecast_ns = Namespace(
     "demand-forecast",
@@ -136,6 +133,13 @@ def _run_forecast(df: pd.DataFrame, sku_map: dict, horizon: int = 7) -> dict[str
     Aggregate daily demand per SKU, run AutoETS forecast, return
     {skuid: DataFrame(ds, y | AutoETS)}.
     """
+    try:
+        import pandas as pd
+        from statsforecast import StatsForecast
+        from statsforecast.models import AutoETS
+    except ModuleNotFoundError as error:
+        raise RuntimeError("pandas and statsforecast are required for demand forecasting.") from error
+
     # Set fixed temporal anchor
     end_date = datetime.today().date()
     start_date = end_date - timedelta(days=29)

@@ -8,7 +8,7 @@
     </div>
     <div class="pc-body">
       <div class="pc-name">{{ part.name }}</div>
-      <div class="pc-sizes">{{ part.sizes.length }} sizes available</div>
+      <div class="pc-meta">{{ sizeCountLabel }}</div>
     </div>
     <svg class="pc-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
       <path d="M4 1l5 5-5 5"/>
@@ -23,7 +23,13 @@ export default {
     part:     { type: Object, required: true },
     selected: { type: Boolean, default: false }
   },
-  emits: ['select']
+  emits: ['select'],
+  computed: {
+    sizeCountLabel() {
+      const count = Array.isArray(this.part.sizes) ? this.part.sizes.length : 0
+      return `${count} size${count === 1 ? '' : 's'} available`
+    }
+  }
 }
 </script>
 
@@ -62,7 +68,7 @@ export default {
 .pc-img {
   width: 44px;
   height: 44px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 6px;
 }
 .pc-placeholder-text {
@@ -80,15 +86,16 @@ export default {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink);
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pc-sizes {
+.pc-meta {
+  margin-top: 4px;
   font-size: 10.5px;
-  color: var(--ink-4);
-  margin-top: 2px;
   font-family: 'Geist Mono', monospace;
+  color: var(--ink-4);
 }
 
 .pc-arrow {

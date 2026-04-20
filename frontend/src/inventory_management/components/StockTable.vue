@@ -82,6 +82,7 @@ export default {
     vendorTarget(p) {
       return {
         source: 'inventory-stock',
+        skuId: p.skuId || p.id || '',
         partId: p.pid || '',
         specKey: this.specKey(p),
         specLabel: this.sizeDisplay(p)

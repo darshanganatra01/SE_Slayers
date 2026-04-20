@@ -100,6 +100,7 @@ const normalizeCompareSize = (size = {}) => ({
   key: size.key || size.size || '',
   size: size.size || '—',
   spec: size.spec || '',
+  specification: size.specification || [size.size || '—', size.spec || ''].filter(Boolean).join(' · '),
   specs: size.specs && typeof size.specs === 'object' ? { ...size.specs } : {},
   suppliers: Array.isArray(size.suppliers) ? size.suppliers.map(normalizeSupplier) : []
 })
@@ -125,6 +126,44 @@ const normalizeComparePart = (part = {}) => ({
   name: part.name || 'Unknown Part',
   image: part.image || resolvePartImage(part.name),
   sizes: Array.isArray(part.sizes) ? part.sizes.map(normalizeCompareSize) : []
+})
+
+const normalizeCompareSearchEntry = (entry = {}) => {
+  const size = entry.size || '—'
+  const spec = entry.spec || ''
+
+  return {
+    id: String(entry.skuId ?? entry.id ?? ''),
+    skuId: String(entry.skuId ?? entry.id ?? ''),
+    vpid: String(entry.vpid ?? ''),
+    pid: String(entry.pid ?? entry.productId ?? ''),
+    productId: String(entry.productId ?? entry.pid ?? ''),
+    name: entry.name || 'Unknown Part',
+    image: entry.image || resolvePartImage(entry.name),
+    size,
+    spec,
+    specKey: entry.specKey || [size, spec].filter(Boolean).join('\n'),
+    specification: entry.specification || [size, spec].filter(Boolean).join(' · '),
+    specs: entry.specs && typeof entry.specs === 'object' ? { ...entry.specs } : {},
+    price: numberOrNull(entry.price ?? entry.currentBuy),
+    currentBuy: numberOrNull(entry.currentBuy ?? entry.price),
+    unitMeasurementBuy: integerOrNull(entry.unitMeasurementBuy),
+    lotSize: integerOrNull(entry.lotSize),
+    vendor: {
+      id: String(entry.vendor?.id ?? ''),
+      name: entry.vendor?.name || 'Unknown Vendor',
+      location: entry.vendor?.location || '—',
+      leadTime: integerOrNull(entry.vendor?.leadTime)
+    }
+  }
+}
+
+const normalizeCompareSelection = (payload = {}) => ({
+  sourceSku: normalizeCompareSearchEntry(payload.sourceSku || payload.sku || {}),
+  suppliers: Array.isArray(payload.suppliers) ? payload.suppliers.map((supplier) => ({
+    ...normalizeSupplier(supplier),
+    isSourceSku: Boolean(supplier.isSourceSku)
+  })) : []
 })
 
 const normalizeProcurement = (procurement = {}) => {
@@ -182,6 +221,12 @@ export const useVendorStore = defineStore('vendors', {
     compareParts: [],
     compareLoading: false,
     compareError: '',
+    compareSkuEntries: [],
+    compareSearchLoading: false,
+    compareSearchError: '',
+    compareSelection: null,
+    compareSelectionLoading: false,
+    compareSelectionError: '',
     selectedDirectoryVendor: null,
     vendorDetailLoading: false,
     vendorDetailError: '',
@@ -233,6 +278,53 @@ export const useVendorStore = defineStore('vendors', {
         this.compareError = error.message || 'Unable to load the parts catalog right now.'
       } finally {
         this.compareLoading = false
+      }
+    },
+
+    async fetchCompareSearchCatalog() {
+      this.compareSearchLoading = true
+      this.compareSearchError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest('/api/vendors/catalog/compare/search')
+        this.compareSkuEntries = (payload.skus || []).map(normalizeCompareSearchEntry)
+
+        if (
+          this.compareSelection?.sourceSku?.skuId
+          && !this.compareSkuEntries.some((entry) => entry.skuId === this.compareSelection.sourceSku.skuId)
+        ) {
+          this.clearCompareSelection()
+        }
+      } catch (error) {
+        this.compareSkuEntries = []
+        this.compareSearchError = error.message || 'Unable to load searchable SKUs right now.'
+      } finally {
+        this.compareSearchLoading = false
+      }
+    },
+
+    async fetchCompareSelection(skuId) {
+      const normalizedSkuId = String(skuId || '').trim()
+      if (!normalizedSkuId) {
+        this.clearCompareSelection()
+        return null
+      }
+
+      this.compareSelectionLoading = true
+      this.compareSelectionError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest(`/api/vendors/catalog/compare/search/${encodeURIComponent(normalizedSkuId)}`)
+        this.compareSelection = normalizeCompareSelection(payload)
+        return this.compareSelection
+      } catch (error) {
+        this.compareSelection = null
+        this.compareSelectionError = error.message || 'Unable to load vendor matches for this SKU right now.'
+        throw error
+      } finally {
+        this.compareSelectionLoading = false
       }
     },
 
@@ -288,6 +380,12 @@ export const useVendorStore = defineStore('vendors', {
       this.vendorDetailError = ''
     },
 
+    clearCompareSelection() {
+      this.compareSelection = null
+      this.compareSelectionLoading = false
+      this.compareSelectionError = ''
+    },
+
     async createVendor(formData) {
       this.vendorSaving = true
       this.vendorSaveError = ''
@@ -301,7 +399,8 @@ export const useVendorStore = defineStore('vendors', {
         const vendor = normalizeVendor(payload.vendor || {})
         await Promise.all([
           this.fetchVendorDirectory(),
-          this.fetchCompareCatalog()
+          this.fetchCompareCatalog(),
+          this.fetchCompareSearchCatalog()
         ])
         this.selectedDirectoryVendor = vendor
         return vendor
@@ -326,7 +425,8 @@ export const useVendorStore = defineStore('vendors', {
         const vendor = normalizeVendor(payload.vendor || {})
         await Promise.all([
           this.fetchVendorDirectory(),
-          this.fetchCompareCatalog()
+          this.fetchCompareCatalog(),
+          this.fetchCompareSearchCatalog()
         ])
         this.selectedDirectoryVendor = vendor
         return vendor
@@ -348,7 +448,10 @@ export const useVendorStore = defineStore('vendors', {
       if (this.selectedDirectoryVendor?.id === String(vendorId)) {
         this.clearVendorDetails()
       }
-      await this.fetchCompareCatalog()
+      await Promise.all([
+        this.fetchCompareCatalog(),
+        this.fetchCompareSearchCatalog()
+      ])
     },
 
     async createProcurement({ skuId, vendorId, lotCount }) {

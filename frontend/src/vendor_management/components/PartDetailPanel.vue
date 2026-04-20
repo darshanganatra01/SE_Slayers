@@ -1,19 +1,33 @@
 <template>
   <div class="part-detail">
-    <!-- Empty state -->
-    <div v-if="!part" class="empty-state">
+    <div v-if="!part && !loading && !error" class="empty-state">
       <div class="es-icon">🔍</div>
       <div class="es-text">Select a part</div>
-      <div class="es-sub">Choose a part from the left to view details and compare vendors</div>
+      <div class="es-sub">Choose a product from the left to see all available specifications and compare vendors</div>
     </div>
 
-    <template v-else>
+    <div v-else-if="loading" class="empty-state">
+      <div class="es-icon">⌛</div>
+      <div class="es-text">Loading vendor matches</div>
+      <div class="es-sub">Finding vendors for the exact product and specification</div>
+    </div>
+
+    <div v-else-if="error" class="empty-state">
+      <div class="es-icon">!</div>
+      <div class="es-text">Unable to load vendor matches</div>
+      <div class="es-sub">{{ error }}</div>
+    </div>
+
+    <template v-else-if="part">
       <div class="pd-header">
-        <div class="pd-title">{{ part.name }}</div>
-        <div class="pd-sub" v-if="!selectedSizeObj">Select a specification to view vendor options</div>
-        <div class="pd-sub" v-else>
-          <span class="pd-sub-size">{{ selectedSpecDisplay }}</span>
-          · select a vendor below to proceed
+        <div>
+          <div class="pd-title">{{ part.name }}</div>
+          <div v-if="selectedSpec" class="pd-sub">
+            <span class="pd-sub-size">{{ selectedSpec.size }}</span>
+            <span v-if="selectedSpec.spec"> · {{ selectedSpec.spec }}</span>
+            <span class="pd-sub-copy"> · select a vendor below to proceed</span>
+          </div>
+          <div v-else class="pd-sub">Choose a specification to compare vendors</div>
         </div>
       </div>
 
@@ -27,48 +41,55 @@
             </div>
           </div>
 
-          <div class="pd-sizes-section">
-            <div class="pd-sizes-label">Available Specifications</div>
-            <div class="pd-sizes-grid">
-              <button
-                v-for="sizeObj in part.sizes"
-                :key="sizeObj.key || sizeObj.size"
-                class="pd-size-btn"
-                :class="{ active: selectedSizeKey === (sizeObj.key || sizeObj.size) }"
-                @click="selectSize(sizeObj)"
-              >
-                <span class="pd-size-copy">
-                  <span class="pd-size-label">{{ sizeObj.size }}</span>
-                  <span v-if="sizeObj.spec" class="pd-size-spec">{{ sizeObj.spec }}</span>
-                </span>
-                <span class="pd-size-vendors">
-                  <svg width="9" height="9" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="2" y="4" width="10" height="8" rx="1"/><path d="M5 4V3a2 2 0 014 0v1"/>
-                  </svg>
-                  {{ sizeObj.suppliers.length }}
-                </span>
-              </button>
-            </div>
+          <div class="pd-specs-heading">Available Specifications</div>
+          <div class="pd-spec-list">
+            <button
+              v-for="size in sizes"
+              :key="size.key"
+              class="pd-spec-card"
+              :class="{ selected: selectedSpecKey === size.key }"
+              type="button"
+              @click="$emit('select-spec', size.key)"
+            >
+              <div class="pd-spec-copy">
+                <div class="pd-spec-title">{{ size.size }}</div>
+                <div v-if="size.spec" class="pd-spec-sub">{{ size.spec }}</div>
+              </div>
+              <div class="pd-spec-count">{{ size.suppliers.length }}</div>
+            </button>
           </div>
         </div>
 
-        <div class="pd-right" :class="{ visible: !!selectedSizeObj }">
-          <div v-if="!selectedSizeObj" class="pd-vendor-empty">
+        <div class="pd-right">
+          <div class="pd-vendors-label">
+            <span v-if="selectedSpec">
+              Vendors for <span class="pd-vendors-spec">{{ selectedSpec.specification || selectedSpec.size }}</span>
+            </span>
+            <span v-else>Choose a specification to compare vendors</span>
+          </div>
+
+          <div v-if="selectedSpec && !comparisonSuppliers.length" class="pd-vendor-empty">
             <div class="pve-icon">🏪</div>
-            <div class="pve-text">Select a specification to compare vendors</div>
+            <div class="pve-text">No priced vendor matches found</div>
+            <div class="pve-sub">This SKU exists, but no vendor pricing rows match the same product and exact specification yet.</div>
+          </div>
+
+          <div v-else-if="!selectedSpec" class="pd-vendor-empty">
+            <div class="pve-icon">📏</div>
+            <div class="pve-text">Select a specification</div>
+            <div class="pve-sub">Once you pick a size/spec on the left, all vendors selling that exact spec will appear here.</div>
           </div>
 
           <template v-else>
-            <div class="pd-vendors-label">
-              Vendors for <strong>{{ selectedSpecDisplay }}</strong>
-            </div>
-
             <div class="pd-vendor-cards">
               <div
-                v-for="v in currentVendors"
+                v-for="v in comparisonSuppliers"
                 :key="v.vendorId"
                 class="pv-card"
-                :class="{ 'best-price': v.vendorId === bestPriceId, 'is-selected': selectedVendorId === v.vendorId }"
+                :class="{
+                  'best-price': v.vendorId === bestPriceId,
+                  'is-selected': selectedVendorId === v.vendorId
+                }"
                 @click="selectedVendorId = v.vendorId"
               >
                 <div class="pv-top">
@@ -76,7 +97,9 @@
                     <div class="pv-name">{{ v.vendor ? v.vendor.name : v.vendorId }}</div>
                     <div class="pv-loc">{{ v.vendor ? v.vendor.location : '' }}</div>
                   </div>
-                  <span v-if="v.vendorId === bestPriceId" class="chip pv-best">Best Price</span>
+                  <div class="pv-chips">
+                    <span v-if="v.vendorId === bestPriceId" class="chip pv-best">Best Price</span>
+                  </div>
                 </div>
                 <div class="pv-details">
                   <div class="pv-detail">
@@ -122,63 +145,49 @@ export default {
   name: 'PartDetailPanel',
   props: {
     part: { type: Object, default: null },
-    preselectedSizeKey: { type: String, default: null }
+    selectedSpecKey: { type: String, default: null },
+    selection: { type: Object, default: null },
+    loading: { type: Boolean, default: false },
+    error: { type: String, default: '' }
   },
-  emits: ['select-vendor'],
+  emits: ['select-spec', 'select-vendor'],
   data() {
     return {
-      selectedSizeKey:  null,
-      selectedSizeObj:  null,
       selectedVendorId: null
     }
   },
   watch: {
-    part() {
-      this.selectedSizeKey  = null
-      this.selectedSizeObj  = null
+    selection() {
       this.selectedVendorId = null
-      this.applyPreselectedSize()
     },
-    preselectedSizeKey() {
-      this.applyPreselectedSize()
+    part() {
+      this.selectedVendorId = null
+    },
+    selectedSpecKey() {
+      this.selectedVendorId = null
     }
   },
   computed: {
-    selectedSpecDisplay() {
-      if (!this.selectedSizeObj) return ''
-      if (this.selectedSizeObj.spec) {
-        return `${this.selectedSizeObj.size} · ${this.selectedSizeObj.spec}`
-      }
-      return this.selectedSizeObj.size
+    sizes() {
+      return Array.isArray(this.part?.sizes) ? this.part.sizes : []
     },
-    currentVendors() {
-      if (!this.selectedSizeObj) return []
-      return this.selectedSizeObj.suppliers
+    selectedSpec() {
+      if (!this.selectedSpecKey) return null
+      return this.sizes.find((size) => size.key === this.selectedSpecKey) || null
+    },
+    sourceSku() {
+      return this.selection?.sourceSku?.skuId ? this.selection.sourceSku : null
+    },
+    comparisonSuppliers() {
+      return Array.isArray(this.selection?.suppliers) ? this.selection.suppliers : []
     },
     bestPriceId() {
-      const pricedVendors = this.currentVendors.filter(v => typeof v.price === 'number')
+      const pricedVendors = this.comparisonSuppliers.filter((vendor) => typeof vendor.price === 'number')
       if (!pricedVendors.length) return null
-      return pricedVendors.reduce((min, v) => v.price < min.price ? v : min).vendorId
+      return pricedVendors.reduce((min, vendor) => vendor.price < min.price ? vendor : min).vendorId
     }
   },
   methods: {
-    applyPreselectedSize() {
-      if (!this.part || !this.preselectedSizeKey) return
-
-      const matchingSize = this.part.sizes.find(
-        (sizeObj) => (sizeObj.key || sizeObj.size) === this.preselectedSizeKey
-      )
-      if (!matchingSize) return
-
-      this.selectedSizeKey = matchingSize.key || matchingSize.size
-      this.selectedSizeObj = matchingSize
-      this.selectedVendorId = null
-    },
-    selectSize(sizeObj) {
-      this.selectedSizeKey  = sizeObj.key || sizeObj.size
-      this.selectedSizeObj  = sizeObj
-      this.selectedVendorId = null
-    },
     leadColor(days) {
       if (days == null) return 'var(--border-2)'
       if (days <= 3) return 'var(--green)'
@@ -194,18 +203,20 @@ export default {
       return `₹${price.toLocaleString('en-IN')}`
     },
     confirmVendor() {
-      const v = this.currentVendors.find(v => v.vendorId === this.selectedVendorId)
+      const vendor = this.comparisonSuppliers.find((candidate) => candidate.vendorId === this.selectedVendorId)
+      if (!vendor || !this.selectedSpec) return
+
       this.$emit('select-vendor', {
-        partId: this.part?.id || '',
-        partName: this.part?.name || '',
-        specification: this.selectedSpecDisplay,
-        vendorId: this.selectedVendorId,
-        vendorName: v?.vendor?.name || this.selectedVendorId,
-        skuId: v?.skuId || '',
-        currentBuy: v?.currentBuy ?? v?.price ?? null,
-        unitMeasurementBuy: v?.unitMeasurementBuy ?? null,
-        lotSize: v?.lotSize ?? null,
-        leadTime: v?.leadTime ?? null
+        partId: this.part?.id || this.sourceSku?.pid || this.sourceSku?.productId || '',
+        partName: this.part?.name || this.sourceSku?.name || '',
+        specification: this.selectedSpec.specification || this.selectedSpec.size || '',
+        vendorId: vendor.vendorId,
+        vendorName: vendor.vendor?.name || vendor.vendorId,
+        skuId: vendor.skuId || '',
+        currentBuy: vendor.currentBuy ?? vendor.price ?? null,
+        unitMeasurementBuy: vendor.unitMeasurementBuy ?? null,
+        lotSize: vendor.lotSize ?? null,
+        leadTime: vendor.leadTime ?? null
       })
     }
   }
@@ -226,13 +237,11 @@ export default {
   background: var(--white);
   border-bottom: 1.5px solid var(--border);
   flex-shrink: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
 }
 .pd-title { font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.2px; }
-.pd-sub   { font-size: 11.5px; color: var(--ink-4); }
+.pd-sub   { font-size: 11.5px; color: var(--ink-4); margin-top: 2px; }
 .pd-sub-size { font-family: 'Geist Mono', monospace; color: var(--blue); font-weight: 600; }
+.pd-sub-copy { color: var(--ink-4); }
 
 .pd-body {
   flex: 1;
@@ -241,16 +250,15 @@ export default {
   gap: 0;
 }
 
-/* ── Left column ── */
 .pd-left {
-  width: 300px;
+  width: 340px;
   flex-shrink: 0;
   border-right: 1.5px solid var(--border);
   overflow-y: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   background: var(--white);
 }
 
@@ -258,95 +266,113 @@ export default {
   background: white;
   border: 1.5px solid var(--border);
   border-radius: 10px;
-  padding: 14px;
+  overflow: hidden;
+  height: 230px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .pd-image {
-  width: 130px;
-  height: 160px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  border-radius: 4px;
 }
 .pd-image-placeholder {
-  width: 130px;
-  height: 160px;
-  border-radius: 4px;
-  background: var(--surface);
-  border: 1px dashed var(--border-2);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  color: var(--ink-4);
+  font-size: 12px;
 }
 .pd-image-icon {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink-4);
-  letter-spacing: 1px;
-}
-.pd-image-text {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   font-size: 11px;
-  color: var(--ink-4);
-  text-align: center;
-  max-width: 90px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
-.pd-sizes-label {
-  font-size: 10.5px;
-  font-weight: 600;
+.pd-specs-heading {
+  font-size: 11px;
+  font-weight: 700;
   color: var(--ink-4);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  letter-spacing: 0.08em;
 }
-.pd-sizes-grid {
+
+.pd-spec-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 10px;
 }
-.pd-size-btn {
+
+.pd-spec-card {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px 13px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: 7px;
-  cursor: pointer;
-  font-family: 'Geist', sans-serif;
-  transition: all 0.12s;
+  gap: 12px;
   text-align: left;
-  width: 100%;
+  cursor: pointer;
+  transition: all 0.12s;
 }
-.pd-size-btn:hover { border-color: var(--blue); background: var(--blue-dim); }
-.pd-size-btn.active { border-color: var(--blue); background: var(--blue-dim); }
-.pd-size-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+.pd-spec-card:hover {
+  border-color: var(--ink-4);
+  background: #f8fafc;
+}
+.pd-spec-card.selected {
+  border-color: var(--blue);
+  background: var(--blue-dim);
+}
+.pd-spec-copy {
   min-width: 0;
 }
-.pd-size-label { font-size: 12.5px; font-weight: 500; color: var(--ink); font-family: 'Geist Mono', monospace; }
-.pd-size-spec {
-  font-size: 10.5px;
-  color: var(--ink-4);
-  line-height: 1.3;
+.pd-spec-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  font-family: 'Geist Mono', monospace;
 }
-.pd-size-vendors { display: flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--ink-4); }
-.pd-size-btn:hover .pd-size-vendors,
-.pd-size-btn.active .pd-size-vendors { color: var(--blue); }
+.pd-spec-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-4);
+}
+.pd-spec-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ink-4);
+  font-family: 'Geist Mono', monospace;
+}
 
-/* ── Right column ── */
 .pd-right {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg);
+}
+
+.pd-vendors-label {
+  padding: 16px 18px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pd-vendors-spec {
+  font-family: 'Geist Mono', monospace;
+  color: var(--blue);
 }
 
 .pd-vendor-empty {
@@ -355,74 +381,183 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  color: var(--ink-4);
+  text-align: center;
+  padding: 24px;
 }
-.pve-icon { font-size: 28px; opacity: 0.25; }
-.pve-text { font-size: 12.5px; color: var(--ink-4); }
-
-.pd-vendors-label {
-  padding: 12px 18px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  flex-shrink: 0;
-}
-.pd-vendors-label strong { color: var(--blue); font-family: 'Geist Mono', monospace; font-size: 12px; }
+.pve-icon { font-size: 20px; }
+.pve-text { font-size: 14px; font-weight: 600; color: var(--ink-3); }
+.pve-sub { font-size: 12px; max-width: 360px; line-height: 1.5; }
 
 .pd-vendor-cards {
   flex: 1;
   overflow-y: auto;
-  padding: 0 18px 14px;
+  padding: 14px 18px 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-/* Vendor cards */
 .pv-card {
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  padding: 11px 13px;
-  cursor: pointer;
-  transition: all 0.12s;
   background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
 }
-.pv-card:hover       { border-color: var(--ink-4); background: var(--surface); }
-.pv-card.best-price  { border-color: var(--green); background: var(--green-dim); }
-.pv-card.is-selected { border-color: var(--blue);  background: var(--blue-dim); }
-.pv-card.best-price.is-selected { border-color: var(--blue); background: var(--blue-dim); }
+.pv-card:hover {
+  border-color: var(--ink-4);
+  background: var(--surface);
+}
+.pv-card.best-price {
+  border-color: #86efac;
+  background: #dcfce7;
+}
+.pv-card.is-selected {
+  border-color: var(--blue);
+  background: var(--blue-dim);
+}
+.pv-card.best-price.is-selected {
+  border-color: #16a34a;
+  background: linear-gradient(180deg, #dcfce7 0%, #dbeafe 100%);
+}
 
 .pv-top {
-  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
-.pv-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
-.pv-loc  { font-size: 10.5px; color: var(--ink-4); margin-top: 1px; }
-.pv-best { background: var(--green-dim); color: var(--green); flex-shrink: 0; }
-
-.pv-details { display: flex; gap: 16px; }
-.pv-detail  { display: flex; flex-direction: column; gap: 1px; }
-.pvd-label  { font-size: 9.5px; font-weight: 600; color: var(--ink-4); text-transform: uppercase; letter-spacing: 0.3px; }
-.pvd-value  { font-size: 13px; font-weight: 600; color: var(--ink); font-family: 'Geist Mono', monospace; }
-.pv-lead    { display: flex; align-items: center; gap: 4px; font-family: 'Geist', sans-serif; font-weight: 500; }
-.pv-dot     { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.pv-selected-mark {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 10px; font-weight: 600; color: var(--blue); margin-top: 7px;
+.pv-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
 }
-
-/* Action bar */
-.pd-action-bar {
-  padding: 12px 18px;
-  border-top: 1.5px solid var(--border);
-  background: var(--white);
-  flex-shrink: 0;
+.pv-loc {
+  font-size: 11px;
+  color: var(--ink-4);
+  margin-top: 3px;
+}
+.pv-chips {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.pd-procure-btn { flex-shrink: 0; }
-.pd-procure-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.pd-action-hint { font-size: 11.5px; color: var(--ink-4); }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.pv-best {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.pv-details {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+.pv-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pvd-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+}
+.pvd-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pv-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pv-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.pv-selected-mark {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.pd-action-bar {
+  border-top: 1.5px solid var(--border);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.pd-action-hint {
+  font-size: 11px;
+  color: var(--ink-4);
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 28px;
+}
+.es-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.es-sub {
+  font-size: 12px;
+  color: var(--ink-4);
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .pd-body {
+    flex-direction: column;
+  }
+
+  .pd-left {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1.5px solid var(--border);
+  }
+
+  .pv-details {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 </style>

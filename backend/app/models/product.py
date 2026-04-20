@@ -9,6 +9,7 @@ class Product(db.Model):
     pid      = db.Column(db.String, primary_key=True)
     pname    = db.Column(db.String, nullable=False)
     category = db.Column(db.String)
+    image_filename = db.Column(db.String)
 
     # ── Relationships ─────────────────────────────────────────────
     vendor_products = db.relationship("VendorProduct", back_populates="product", lazy="dynamic")

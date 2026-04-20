@@ -57,6 +57,7 @@ def seed_products() -> int:
 
         product.pname = row["PName"].strip()
         product.category = _clean(row.get("Category"))
+        product.image_filename = _clean(row.get("ImageFile"))
 
     db.session.commit()
     return seeded

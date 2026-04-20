@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 
 const normalizePendingOrder = (procurement = {}) => {
@@ -18,6 +18,26 @@ const normalizePendingOrder = (procurement = {}) => {
   }
 }
 
+const buildPartPayload = (formData) => ({
+  name: formData.name,
+  category: formData.category,
+  unitMeasurementBuy: formData.unitMeasurementBuy,
+  lotSizeBuy: formData.lotSizeBuy,
+  vendorIds: [...formData.vendorIds],
+  specs: formData.specs.map((spec) => ({
+    label: spec.label,
+    stockQty: spec.stockQty,
+    threshold: spec.threshold,
+    sellPrice: spec.sellPrice,
+    vendorPrices: Object.entries(spec.vendorPrices || {}).map(([vendorId, unitBuyPrice]) => ({
+      vendorId,
+      unitBuyPrice
+    }))
+  }))
+})
+
+const partDetailUrl = (productId) => `/api/inventory/parts?productId=${encodeURIComponent(productId)}`
+
 export const useInventoryStore = defineStore('inventory', {
   state: () => ({
     parts: [],
@@ -27,7 +47,11 @@ export const useInventoryStore = defineStore('inventory', {
     profData: {},
     pendingOrders: [],
     stockHistory: [],
-    portfolioProducts: []
+    portfolioProducts: [],
+    partFormVendors: [],
+    partFormVendorsLoading: false,
+    partSaving: false,
+    partSaveError: ''
   }),
 
   getters: {
@@ -83,29 +107,104 @@ export const useInventoryStore = defineStore('inventory', {
       }
     },
 
-    addPart(data) {
-      const id = this.parts.length ? Math.max(...this.parts.map((p) => Number(p.id))) + 1 : 1
-      const stock = parseInt(data.openingStock) || 0
-      const threshold = parseInt(data.threshold) || 5
-      let status = 'instock'
-      if (stock === 0) status = 'out'
-      else if (stock < threshold) status = 'low'
+    async fetchPartFormVendors(force = false) {
+      if (this.partFormVendorsLoading) return
+      if (!force && this.partFormVendors.length) return
 
-      this.parts.push({
-        id,
-        skuId: data.sku || String(id),
-        sku: data.sku || String(id),
-        name: data.name,
-        category: data.category,
-        size: data.size,
-        dims: data.dims,
-        spec: data.spec,
-        stock,
-        threshold,
-        maxStock: Math.max(stock, threshold, 1),
-        status,
-        sellPrice: parseFloat(data.sellPrice) || 0,
-      })
+      this.partFormVendorsLoading = true
+      try {
+        const authStore = useAuthStore()
+        const payload = await authStore.authenticatedRequest('/api/vendors')
+        this.partFormVendors = (payload.vendors || []).map((vendor) => {
+          const leadTime = Number(vendor.leadTime)
+          return {
+            id: String(vendor.id ?? ''),
+            name: vendor.name || 'Unknown Vendor',
+            location: vendor.location || '—',
+            leadTime: Number.isFinite(leadTime) ? leadTime : null,
+            prefix: vendor.prefix || ''
+          }
+        })
+      } catch (error) {
+        this.partFormVendors = []
+        throw error
+      } finally {
+        this.partFormVendorsLoading = false
+      }
+    },
+
+    async createPart(formData) {
+      this.partSaving = true
+      this.partSaveError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = buildPartPayload(formData)
+
+        const requestBody = new FormData()
+        requestBody.append('payload', JSON.stringify(payload))
+        if (typeof File !== 'undefined' && formData.imageFile instanceof File) {
+          requestBody.append('image', formData.imageFile)
+        }
+
+        const response = await authStore.authenticatedRequest('/api/inventory/parts', {
+          method: 'POST',
+          body: requestBody
+        })
+        try {
+          await this.fetchOverview()
+        } catch {
+          // Keep the creation result even if the overview refresh misses once.
+        }
+        return response.product || null
+      } catch (error) {
+        this.partSaveError = error.message || 'Unable to create this part right now.'
+        throw error
+      } finally {
+        this.partSaving = false
+      }
+    },
+
+    async fetchPart(productId) {
+      const authStore = useAuthStore()
+      const payload = await authStore.authenticatedRequest(partDetailUrl(productId))
+      return payload.product || null
+    },
+
+    async updatePart(productId, formData) {
+      this.partSaving = true
+      this.partSaveError = ''
+
+      try {
+        const authStore = useAuthStore()
+        const payload = buildPartPayload(formData)
+
+        const requestBody = new FormData()
+        requestBody.append('payload', JSON.stringify(payload))
+        if (typeof File !== 'undefined' && formData.imageFile instanceof File) {
+          requestBody.append('image', formData.imageFile)
+        }
+
+        const response = await authStore.authenticatedRequest(partDetailUrl(productId), {
+          method: 'PATCH',
+          body: requestBody
+        })
+        try {
+          await this.fetchOverview()
+        } catch {
+          // Keep the update result even if the overview refresh misses once.
+        }
+        return response.product || null
+      } catch (error) {
+        this.partSaveError = error.message || 'Unable to update this part right now.'
+        throw error
+      } finally {
+        this.partSaving = false
+      }
     }
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useInventoryStore, import.meta.hot))
+}

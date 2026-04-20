@@ -8,6 +8,11 @@ const defaultHeaders = {
   'Content-Type': 'application/json',
 }
 
+const isFormDataBody = (body) =>
+  typeof FormData !== 'undefined' && body instanceof FormData
+
+const shouldApplyJsonHeaders = (body) => Boolean(body) && !isFormDataBody(body)
+
 const parseStoredUser = () => {
   const raw = localStorage.getItem(USER_STORAGE_KEY)
   if (!raw) return null
@@ -20,8 +25,8 @@ const parseStoredUser = () => {
   }
 }
 
-const buildAuthHeaders = (token) => ({
-  ...defaultHeaders,
+const buildAuthHeaders = (token, body) => ({
+  ...(shouldApplyJsonHeaders(body) ? defaultHeaders : {}),
   ...(token ? { Authorization: `Bearer ${token}` } : {}),
 })
 
@@ -35,7 +40,7 @@ const readErrorMessage = async (response) => {
 }
 
 const mergeHeaders = (options = {}, extraHeaders = {}) => ({
-  ...(options.body ? defaultHeaders : {}),
+  ...(shouldApplyJsonHeaders(options.body) ? defaultHeaders : {}),
   ...(options.headers || {}),
   ...extraHeaders,
 })
@@ -144,7 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       return await request(path, {
         ...options,
-        headers: mergeHeaders(options, buildAuthHeaders(token.value)),
+        headers: mergeHeaders(options, buildAuthHeaders(token.value, options.body)),
       })
     } catch (error) {
       if (
