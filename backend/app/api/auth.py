@@ -1,12 +1,9 @@
-from flask import request
+from flask import Response, request
 from flask_restx import Namespace, Resource, fields
 
 from app import db
 from app.auth import AuthError, auth_required, issue_token, register_customer, serialize_user
 from app.models.user import User
-
-import yaml
-from flask import Response
 
 auth_ns = Namespace("auth", description="Authentication endpoints")
 
@@ -123,6 +120,12 @@ class MeResource(Resource):
 @auth_ns.hide
 class SwaggerYaml(Resource):
     def get(self):
+        from app.api import api
+        try:
+            import yaml
+        except ModuleNotFoundError:
+            return {"message": "PyYAML is required to generate swagger.yaml."}, 503
+
         # Convert schema to YAML string
         yaml_data = yaml.dump(api.__schema__, default_flow_style=False)
         return Response(yaml_data, mimetype='text/yaml')

@@ -2,13 +2,15 @@
   <div class="tbl-wrap">
     <table>
       <colgroup>
-        <col style="width:30%">
-        <col style="width:70%">
+        <col style="width:26%">
+        <col style="width:56%">
+        <col style="width:18%">
       </colgroup>
       <thead>
         <tr>
           <th>Product name</th>
           <th>Size &amp; Specifications</th>
+          <th class="r">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -36,6 +38,11 @@
             </div>
             <div v-else class="empty-size">No sizes available yet</div>
           </td>
+          <td class="r">
+            <button class="btn btn-primary portfolio-edit-btn" type="button" @click.stop="$emit('edit-product', prod.key)">
+              Edit Part
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -48,7 +55,7 @@ export default {
   props: {
     products: { type: Array, default: () => [] }
   },
-  emits: ['open-profit'],
+  emits: ['open-profit', 'edit-product'],
   methods: {
     chipClass(status) {
       if (status === 'ok')  return 'sc-ok'
@@ -98,6 +105,9 @@ tr:last-child td { border-bottom: none; }
   font-size: 12px;
   color: var(--ink-4);
 }
+.portfolio-edit-btn {
+  white-space: nowrap;
+}
 .sc {
   display: inline-flex;
   flex-direction: column;
@@ -121,6 +131,30 @@ tr:last-child td { border-bottom: none; }
 .sc-ok  { background: var(--green-dim); color: var(--green); border-color: #bbf7d0; }
 .sc-low { background: var(--amber-dim); color: #92400e; border-color: #fde68a; }
 .sc-out { background: var(--red-dim);   color: var(--red);   border-color: #fecaca; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 9px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: 'Geist', sans-serif;
+  cursor: pointer;
+  transition: all 0.12s;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
 
 
 </style>

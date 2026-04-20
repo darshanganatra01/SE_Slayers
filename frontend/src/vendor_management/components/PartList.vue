@@ -4,14 +4,19 @@
     <div v-if="loading" class="pl-state">
       <div class="es-icon">⌛</div>
       <div class="es-text">Loading parts catalog</div>
-      <div class="es-sub">Fetching products and available sizes</div>
+      <div class="es-sub">Fetching products and available specifications</div>
     </div>
     <div v-else-if="error" class="pl-state">
       <div class="es-icon">!</div>
       <div class="es-text">Unable to load parts</div>
       <div class="es-sub">{{ error }}</div>
     </div>
-    <div class="pl-cards">
+    <div v-else-if="!parts.length" class="pl-state">
+      <div class="es-icon">🔎</div>
+      <div class="es-text">No part matches found</div>
+      <div class="es-sub">Try a different part name or specification search</div>
+    </div>
+    <div v-else class="pl-cards">
       <PartCard
         v-for="part in parts"
         :key="part.id"

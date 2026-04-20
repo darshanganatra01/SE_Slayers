@@ -1,6 +1,7 @@
 from flask_restx import Namespace, Resource
 from flask import request
 from app import db
+from app.catalog_utils import legacy_product_image_path, product_image_url
 from app.models.product import Product
 from app.models.sku import SKU
 from app.models.vendor import VendorProduct
@@ -23,7 +24,11 @@ class ProductList(Resource):
         results = []
         for p in products:
             # Get the first SKU to determine the unit measurement and min price
-            first_sku = SKU.query.join(VendorProduct).filter(VendorProduct.pid == p.pid).first()
+            sellable_sku_query = SKU.query.join(VendorProduct).filter(
+                VendorProduct.pid == p.pid,
+                SKU.current_sell_rate.isnot(None),
+            )
+            first_sku = sellable_sku_query.first()
             unit_measurement = "piece"
             starting_price = 0.0
             
@@ -35,14 +40,13 @@ class ProductList(Resource):
                     unit_measurement = f"pack ({unit} pcs)"
                     
                 # get all SKUs for minimum price
-                product_skus = SKU.query.join(VendorProduct).filter(VendorProduct.pid == p.pid).all()
+                product_skus = sellable_sku_query.all()
                 if product_skus:
                     prices = [float(s.current_sell_rate) for s in product_skus if s.current_sell_rate is not None]
                     if prices:
                         starting_price = min(prices)
             
-            # Use mock image logic
-            image = f"@/customer_dashboard/customer_assets/{p.pname}.png".replace("G. I.", "GI")
+            image = product_image_url(p.image_filename) or legacy_product_image_path(p.pname)
             
             results.append({
                 "pid": p.pid,
@@ -75,7 +79,11 @@ class ProductDetail(Resource):
         if not p:
             return {"message": "Product not found"}, 404
             
-        first_sku = SKU.query.join(VendorProduct).filter(VendorProduct.pid == p.pid).first()
+        sellable_sku_query = SKU.query.join(VendorProduct).filter(
+            VendorProduct.pid == p.pid,
+            SKU.current_sell_rate.isnot(None),
+        )
+        first_sku = sellable_sku_query.first()
         unit_measurement = "piece"
         if first_sku:
             unit = first_sku.unit_measurement_sell or 1
@@ -84,7 +92,7 @@ class ProductDetail(Resource):
             else:
                 unit_measurement = f"pack ({unit} pcs)"
 
-        image = f"@/customer_dashboard/customer_assets/{p.pname}.png".replace("G. I.", "GI")
+        image = product_image_url(p.image_filename) or legacy_product_image_path(p.pname)
         
         product_data = {
             "pid": p.pid,
@@ -95,7 +103,7 @@ class ProductDetail(Resource):
         }
         
         # Get all SKUs for this product
-        skus = SKU.query.join(VendorProduct).filter(VendorProduct.pid == p.pid).all()
+        skus = sellable_sku_query.all()
         sku_list = []
         for sku in skus:
             # Format specs into a single string

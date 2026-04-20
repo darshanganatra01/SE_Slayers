@@ -990,7 +990,11 @@ class ProductSKUsResource(Resource):
     def get(self, pid):
         """Return all SKU variants for a given product."""
         import json as _json
-        skus = SA_SKU.query.join(VendorProduct).filter(VendorProduct.pid == pid).all()
+        skus = (
+            SA_SKU.query.join(VendorProduct)
+            .filter(VendorProduct.pid == pid, SA_SKU.current_sell_rate.isnot(None))
+            .all()
+        )
         sku_list = []
         for s in skus:
             specs_str = ""

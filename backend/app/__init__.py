@@ -2,6 +2,7 @@ import os
 
 from flask import Flask
 from flask_cors import CORS
+from sqlalchemy import inspect, text
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
@@ -10,6 +11,29 @@ from config import config_by_name
 # ── Extensions (created here, initialised in create_app) ──────────
 db = SQLAlchemy()
 migrate = Migrate()
+
+
+def _ensure_schema_compatibility() -> None:
+    """Apply small runtime compatibility fixes for existing databases.
+
+    Some developer environments still have an older `products` table that was
+    created before `image_filename` was introduced. `create_all()` will not add
+    the new column to an existing table, and any ORM query that loads `Product`
+    will fail until the schema is updated. We patch that column in a safe,
+    idempotent way at startup so the app remains usable even before a manual
+    Alembic upgrade is run.
+    """
+
+    inspector = inspect(db.engine)
+    if "products" not in inspector.get_table_names():
+        return
+
+    product_columns = {column["name"] for column in inspector.get_columns("products")}
+    if "image_filename" in product_columns:
+        return
+
+    with db.engine.begin() as connection:
+        connection.execute(text("ALTER TABLE products ADD COLUMN image_filename VARCHAR"))
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -68,5 +92,8 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # ── Import models so Alembic can detect them ──────────────────
     from app import models  # noqa: F401
+
+    with app.app_context():
+        _ensure_schema_compatibility()
 
     return app

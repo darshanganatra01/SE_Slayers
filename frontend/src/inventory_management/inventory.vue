@@ -12,7 +12,7 @@
           <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Export
         </button>
-        <button class="btn btn-primary" @click="showAddModal = true">+ Add part</button>
+        <button class="btn btn-primary" @click="openAddPart">+ Add part</button>
       </template>
     </AppTopbar>
 
@@ -54,6 +54,7 @@
         v-if="curTab === 'portfolio'"
         :products="store.portfolioProducts"
         @open-profit="openProfit"
+        @edit-product="openEditPart"
       />
 
       <div v-if="curTab !== 'portfolio'" class="inv-bottom-grid">
@@ -77,9 +78,15 @@
 
     <AddPartModal
       :visible="showAddModal"
+      :mode="partModalMode"
+      :initial-data="partModalData"
       :categories="store.categories"
-      @close="showAddModal = false"
-      @submit="handleAddPart"
+      :vendors="store.partFormVendors"
+      :vendors-loading="store.partFormVendorsLoading"
+      :saving="store.partSaving"
+      :save-error="store.partSaveError"
+      @close="closeAddPart"
+      @save="handleAddPart"
     />
 
     <AppToast ref="toast" />
@@ -90,6 +97,7 @@
 <script>
 import { onMounted } from 'vue'
 import { useInventoryStore } from './store.js'
+import { useAuthStore } from '../stores/auth'
 import AppTopbar       from '../components/AppTopbar.vue'
 import AppSearchbar    from '../components/AppSearchbar.vue'
 import AppToast        from '../components/AppToast.vue'
@@ -100,6 +108,8 @@ import PendingArrivals from './components/PendingArrivals.vue'
 import StockHistory    from './components/StockHistory.vue'
 import ProfitPopup     from './components/ProfitPopup.vue'
 import AddPartModal    from './components/AddPartModal.vue'
+
+const partDetailUrl = (productId) => `/api/inventory/parts?productId=${encodeURIComponent(productId)}`
 
 export default {
   name: 'InventoryManagement',
@@ -112,10 +122,11 @@ export default {
 
   setup() {
     const store = useInventoryStore()
+    const authStore = useAuthStore()
     onMounted(() => {
       store.fetchOverview()
     })
-    return { store }
+    return { store, authStore }
   },
 
   data() {
@@ -124,7 +135,9 @@ export default {
       searchQ: '',
       showProfitPopup: false,
       profitPopupKey: '',
-      showAddModal: false
+      showAddModal: false,
+      partModalMode: 'add',
+      partModalData: null
     }
   },
 
@@ -154,6 +167,60 @@ export default {
   },
 
   methods: {
+    buildPartRequestBody(formData) {
+      const payload = {
+        name: formData.name,
+        category: formData.category,
+        unitMeasurementBuy: formData.unitMeasurementBuy,
+        lotSizeBuy: formData.lotSizeBuy,
+        vendorIds: [...formData.vendorIds],
+        specs: formData.specs.map((spec) => ({
+          label: spec.label,
+          stockQty: spec.stockQty,
+          threshold: spec.threshold,
+          sellPrice: spec.sellPrice,
+          vendorPrices: Object.entries(spec.vendorPrices || {}).map(([vendorId, unitBuyPrice]) => ({
+            vendorId,
+            unitBuyPrice
+          }))
+        }))
+      }
+
+      const requestBody = new FormData()
+      requestBody.append('payload', JSON.stringify(payload))
+      if (typeof File !== 'undefined' && formData.imageFile instanceof File) {
+        requestBody.append('image', formData.imageFile)
+      }
+      return requestBody
+    },
+    async fetchPartForEdit(productId) {
+      if (typeof this.store.fetchPart === 'function') {
+        return this.store.fetchPart(productId)
+      }
+      const payload = await this.authStore.authenticatedRequest(partDetailUrl(productId))
+      return payload.product || null
+    },
+    async savePartChanges(productId, formData) {
+      if (typeof this.store.updatePart === 'function') {
+        return this.store.updatePart(productId, formData)
+      }
+
+      this.store.partSaving = true
+      this.store.partSaveError = ''
+      try {
+        const response = await this.authStore.authenticatedRequest(partDetailUrl(productId), {
+          method: 'PATCH',
+          body: this.buildPartRequestBody(formData)
+        })
+        await this.store.fetchOverview()
+        return response.product || null
+      } catch (error) {
+        this.store.partSaveError = error.message || 'Unable to update this part right now.'
+        throw error
+      } finally {
+        this.store.partSaving = false
+      }
+    },
     goVendor(target, size) {
       if (target && typeof target === 'object' && target.source === 'procurement-history') {
         this.$router.push({
@@ -168,9 +235,20 @@ export default {
       if (
         target
         && typeof target === 'object'
-        && target.partId
-        && target.specKey
       ) {
+        if (target.skuId) {
+          this.$router.push({
+            name: 'vendors',
+            query: {
+              tab: 'compare',
+              skuId: target.skuId
+            }
+          })
+          return
+        }
+        if (!target.partId || !target.specKey) {
+          return
+        }
         this.$router.push({
           name: 'vendors',
           query: {
@@ -187,9 +265,56 @@ export default {
       this.profitPopupKey = key
       this.showProfitPopup = true
     },
-    handleAddPart(formData) {
-      this.store.addPart(formData)
-      this.$refs.toast.show('✓', 'Part added', formData.name || 'New Part')
+    async openAddPart() {
+      this.store.partSaveError = ''
+      this.partModalMode = 'add'
+      this.partModalData = null
+      this.showAddModal = true
+      try {
+        await this.store.fetchPartFormVendors()
+      } catch (error) {
+        this.$refs.toast.show('!', 'Unable to load vendors', error.message || 'Please try again')
+      }
+    },
+    async openEditPart(productId) {
+      this.store.partSaveError = ''
+      this.partModalMode = 'edit'
+      this.partModalData = null
+
+      try {
+        await this.store.fetchPartFormVendors()
+        this.partModalData = await this.fetchPartForEdit(productId)
+        this.showAddModal = true
+      } catch (error) {
+        this.$refs.toast.show('!', 'Unable to load part', error.message || 'Please try again')
+      }
+    },
+    closeAddPart() {
+      if (this.store.partSaving) return
+      this.store.partSaveError = ''
+      this.showAddModal = false
+      this.partModalData = null
+      this.partModalMode = 'add'
+    },
+    async handleAddPart(formData) {
+      const isEditMode = this.partModalMode === 'edit'
+      try {
+        const product = isEditMode && formData.id
+          ? await this.savePartChanges(formData.id, formData)
+          : await this.store.createPart(formData)
+        this.closeAddPart()
+        this.$refs.toast.show(
+          '✓',
+          isEditMode ? 'Part updated' : 'Part added',
+          product?.name || formData.name || 'New Part'
+        )
+      } catch (error) {
+        this.$refs.toast.show(
+          '!',
+          isEditMode ? 'Unable to update part' : 'Unable to add part',
+          error.message || 'Please try again'
+        )
+      }
     },
     exportData() {
       alert('Export functionality — coming soon')

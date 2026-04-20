@@ -4,7 +4,7 @@
     <AppTopbar title="Vendors" :meta="headMeta">
       <template #actions>
         <div class="vendor-actions">
-          <AppSearchbar v-model="searchQ" class="vendor-search" placeholder="Search vendors…" />
+          <AppSearchbar v-model="searchQ" class="vendor-search" :placeholder="searchPlaceholder" />
           <FilterBar
             v-if="activeTab === 'list'"
             class="vendor-filterbar"
@@ -67,15 +67,19 @@
     <!-- Part Search & Compare tab -->
     <div v-else-if="activeTab === 'compare'" class="tab-body tab-compare">
       <PartList
-        :parts="store.compareParts"
+        :parts="filteredCompareParts"
         :loading="store.compareLoading"
         :error="store.compareError"
-        :selected-part-id="selectedPartId"
+        :selected-part-id="selectedComparePartId"
         @select="handleComparePartSelect"
       />
       <PartDetailPanel
-        :part="selectedPart"
-        :preselected-size-key="compareSpecKey"
+        :part="selectedComparePart"
+        :selected-spec-key="selectedCompareSpecKey"
+        :selection="store.compareSelection"
+        :loading="store.compareSelectionLoading"
+        :error="store.compareSelectionError"
+        @select-spec="handleCompareSpecSelect"
         @select-vendor="handleVendorSelected"
       />
     </div>
@@ -156,8 +160,8 @@ export default {
       searchQ: '',
       filterLeadTime: 'all',
       filterLocation: 'all',
-      selectedPartId: null,
-      compareSpecKey: null,
+      selectedComparePartId: null,
+      selectedCompareSpecKey: null,
       selectedVendorId: null,
       selectedProcurementId: null,
       markingReceivedId: null,
@@ -181,17 +185,30 @@ export default {
   mounted() {
     this.store.fetchVendorDirectory()
     this.store.fetchCompareCatalog()
+    this.store.fetchCompareSearchCatalog()
     this.store.fetchProcurements()
   },
 
   computed: {
     headMeta() {
+      if (this.activeTab === 'compare') {
+        if (this.store.compareLoading) return 'Loading parts catalog...'
+        return `${this.filteredCompareParts.length} Part${this.filteredCompareParts.length !== 1 ? 's' : ''}`
+      }
       if (this.store.directoryLoading) return 'Loading vendor directory...'
       return `${this.store.activeVendorCount} Active Vendors`
     },
     pageSubtitle() {
+      if (this.activeTab === 'compare') {
+        if (this.store.compareLoading) return 'Loading parts...'
+        return `${this.filteredCompareParts.length} parts in the catalog`
+      }
       if (this.store.directoryLoading) return 'Loading vendors...'
       return `${this.store.activeVendorCount} Active Vendors`
+    },
+    searchPlaceholder() {
+      if (this.activeTab === 'compare') return 'Search parts or specifications...'
+      return 'Search vendors...'
     },
     uniqueLocations() {
       return [...new Set(this.store.directoryVendors.map(v => v.location).filter(Boolean))].sort()
@@ -237,12 +254,34 @@ export default {
       }
       return list
     },
+    filteredCompareParts() {
+      let list = this.store.compareParts
+      if (!this.searchQ) return list
+
+      const q = this.searchQ.toLowerCase()
+      return list.filter((part) => {
+        const haystack = [
+          part.name,
+          ...(Array.isArray(part.sizes)
+            ? part.sizes.flatMap((size) => [
+              size.size,
+              size.spec,
+              size.specification,
+              ...(Array.isArray(size.suppliers)
+                ? size.suppliers.flatMap((supplier) => [supplier.vendor?.name, supplier.vendor?.location, supplier.skuId])
+                : [])
+            ])
+            : [])
+        ].filter(Boolean).join(' ').toLowerCase()
+        return haystack.includes(q)
+      })
+    },
     selectedVendor() {
       return this.store.selectedDirectoryVendor
     },
-    selectedPart() {
-      if (!this.selectedPartId) return null
-      return this.store.compareParts.find(p => p.id === this.selectedPartId) || null
+    selectedComparePart() {
+      if (!this.selectedComparePartId) return null
+      return this.store.compareParts.find((part) => part.id === this.selectedComparePartId) || null
     }
   },
 
@@ -260,6 +299,9 @@ export default {
       }
     },
     'store.compareParts.length'() {
+      this.syncCompareRoute()
+    },
+    'store.compareSkuEntries.length'() {
       this.syncCompareRoute()
     }
   },
@@ -311,17 +353,109 @@ export default {
       if (routeTab !== 'compare') return
 
       this.activeTab = 'compare'
-      this.selectedPartId = typeof this.$route.query.partId === 'string' ? this.$route.query.partId : null
-      this.compareSpecKey = typeof this.$route.query.specKey === 'string' ? this.$route.query.specKey : null
+      const routeSkuId = typeof this.$route.query.skuId === 'string' ? this.$route.query.skuId : ''
+      if (routeSkuId) {
+        const routeEntry = this.store.compareSkuEntries.find((entry) => entry.skuId === routeSkuId)
+        if (routeEntry) {
+          this.selectComparePart(routeEntry.pid, routeEntry.specKey)
+        }
+        return
+      }
+
+      const routePartId = typeof this.$route.query.partId === 'string' ? this.$route.query.partId : ''
+      const routeSpecKey = typeof this.$route.query.specKey === 'string' ? this.$route.query.specKey : ''
+      if (!routePartId || !routeSpecKey) {
+        return
+      }
+      this.selectComparePart(routePartId, routeSpecKey)
     },
 
     goBackToList() {
       this.$router.push({ name: 'vendors' })
     },
 
+    representativeSkuId(part, specKey) {
+      const spec = Array.isArray(part?.sizes)
+        ? part.sizes.find((size) => size.key === specKey)
+        : null
+      if (!spec) return ''
+
+      const suppliers = Array.isArray(spec.suppliers) ? [...spec.suppliers] : []
+      const pricedSuppliers = suppliers.filter((supplier) => typeof supplier.price === 'number')
+      if (pricedSuppliers.length) {
+        pricedSuppliers.sort((left, right) => left.price - right.price)
+        return pricedSuppliers[0]?.skuId || ''
+      }
+      if (suppliers.length) {
+        return suppliers[0]?.skuId || ''
+      }
+
+      const fallbackEntry = this.store.compareSkuEntries.find(
+        (entry) => entry.pid === part.id && entry.specKey === specKey
+      )
+      return fallbackEntry?.skuId || ''
+    },
+
+    async selectCompareSpec(partId, specKey) {
+      const normalizedPartId = String(partId || '').trim()
+      const normalizedSpecKey = String(specKey || '').trim()
+      if (!normalizedPartId || !normalizedSpecKey) return
+
+      const part = this.store.compareParts.find((candidate) => candidate.id === normalizedPartId)
+      if (!part) return
+
+      this.selectedComparePartId = normalizedPartId
+      this.selectedCompareSpecKey = normalizedSpecKey
+
+      const skuId = this.representativeSkuId(part, normalizedSpecKey)
+      if (!skuId) {
+        this.store.clearCompareSelection()
+        return
+      }
+
+      if (
+        this.store.compareSelection?.sourceSku?.skuId === skuId
+        && !this.store.compareSelectionError
+      ) {
+        return
+      }
+
+      try {
+        await this.store.fetchCompareSelection(skuId)
+      } catch {
+        // The store already captures the error state for the panel.
+      }
+    },
+
+    async selectComparePart(partId, preferredSpecKey = '') {
+      const normalizedPartId = String(partId || '').trim()
+      if (!normalizedPartId) return
+
+      const part = this.store.compareParts.find((candidate) => candidate.id === normalizedPartId)
+      if (!part) return
+
+      this.selectedComparePartId = normalizedPartId
+      const availableSizes = Array.isArray(part.sizes) ? part.sizes : []
+      const nextSpecKey = preferredSpecKey && availableSizes.some((size) => size.key === preferredSpecKey)
+        ? preferredSpecKey
+        : availableSizes[0]?.key || ''
+
+      if (!nextSpecKey) {
+        this.selectedCompareSpecKey = null
+        this.store.clearCompareSelection()
+        return
+      }
+
+      await this.selectCompareSpec(normalizedPartId, nextSpecKey)
+    },
+
     handleComparePartSelect(partId) {
-      this.selectedPartId = partId
-      this.compareSpecKey = null
+      this.selectComparePart(partId, this.selectedComparePartId === partId ? this.selectedCompareSpecKey : '')
+    },
+
+    handleCompareSpecSelect(specKey) {
+      if (!this.selectedComparePartId) return
+      this.selectCompareSpec(this.selectedComparePartId, specKey)
     },
 
     openAddVendor() {
@@ -405,7 +539,10 @@ export default {
       if (this.store.selectedDirectoryVendor?.id === String(vendorId)) {
         this.store.clearVendorDetails()
       }
-      await this.store.fetchCompareCatalog()
+      await Promise.all([
+        this.store.fetchCompareCatalog(),
+        this.store.fetchCompareSearchCatalog()
+      ])
     },
 
     handleVendorSelected(selection) {
