@@ -235,7 +235,7 @@ class InternalOrdersResource(Resource):
             customer_name = customer.customer_name if customer else "Unknown"
             shop_name = customer.company_name if hasattr(customer, "company_name") else customer_name
             acp_val = customer.acp if customer and customer.acp is not None else 30
-            priority = map_acp_to_priority(acp_val)
+            priority = order.priority if order.priority else map_acp_to_priority(acp_val)
             cust_type = map_cust_type(priority)
             date_str = order.order_date.strftime("%B %d %Y") if order.order_date else ""
 
@@ -362,7 +362,7 @@ class InternalOrdersResource(Resource):
                         })
                     s_value += (psd.packed_qty * info["unit_price"])
 
-            if s_items:
+            if s_items and not all_received:
                 orders_data.append({
                     "id": f"{order.coid}-S", "status": "shipped", "order": status_bucket_counts["shipped"],
                     "customer": customer_name, "custType": cust_type, "priority": priority,
@@ -854,22 +854,55 @@ class CollectPaymentResource(Resource):
                 break
                 
             o = ui["order"]
-            unpaid = ui["unpaid"]
-            pay_amt = min(rem_amount, unpaid)
+            unpaid_for_order = ui["unpaid"]
+            pay_amt_for_order = min(rem_amount, unpaid_for_order)
             
-            pay_id = "PAY-" + uuid.uuid4().hex[:6].upper()
-            new_payment = Payment(
-                payment_id=pay_id,
-                coid=o.coid,
-                recorded_by=uid,
-                payment_date=date.today(),
-                amount=pay_amt,
-                method="Auto-FIFO",
-                notes=f"FIFO Collection"
-            )
-            db.session.add(new_payment)
-            payments_made.append({"order_id": o.coid, "amount": pay_amt})
-            rem_amount -= pay_amt
+            rem_for_order = pay_amt_for_order
+            
+            # 1. First allocate to invoices
+            order_invs = []
+            for slip in o.packing_slips.all():
+                for inv in slip.invoices.all():
+                    order_invs.append(inv)
+            # sort invoices by date
+            order_invs.sort(key=lambda x: x.invoice_date)
+            
+            for inv in order_invs:
+                if rem_for_order <= 0: break
+                inv_total = float(inv.total_amount or 0)
+                inv_paid = sum(float(p.amount) for p in inv.payments.all())
+                if inv_paid < inv_total:
+                    inv_unpaid = inv_total - inv_paid
+                    pay_inv = min(rem_for_order, inv_unpaid)
+                    
+                    new_payment = Payment(
+                        payment_id="PAY-" + uuid.uuid4().hex[:6].upper(),
+                        coid=o.coid,
+                        cinv_id=inv.cinv_id,
+                        recorded_by=uid,
+                        payment_date=date.today(),
+                        amount=pay_inv,
+                        method="Auto-FIFO",
+                        notes=f"FIFO Collection (Invoice {inv.cinv_id})"
+                    )
+                    db.session.add(new_payment)
+                    rem_for_order -= pay_inv
+                    
+            # 2. Allocate remainder as advance for the order itself
+            if rem_for_order > 0:
+                new_payment = Payment(
+                    payment_id="PAY-" + uuid.uuid4().hex[:6].upper(),
+                    coid=o.coid,
+                    recorded_by=uid,
+                    payment_date=date.today(),
+                    amount=rem_for_order,
+                    method="Auto-FIFO",
+                    notes=f"FIFO Collection (Advance Order {o.coid})"
+                )
+                db.session.add(new_payment)
+                
+            payments_made.append({"order_id": o.coid, "amount": pay_amt_for_order})
+            rem_amount -= pay_amt_for_order
             
         db.session.commit()
         return {

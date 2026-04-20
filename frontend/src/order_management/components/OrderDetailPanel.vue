@@ -305,7 +305,6 @@ export default {
         <div class="block">
           <h3>Order Details</h3>
           <p><span style="color:#64748b;display:inline-block;width:80px;">Date:</span> ${order.placedOn}</p>
-          <p><span style="color:#64748b;display:inline-block;width:80px;">Priority:</span> ${order.priority || 'Standard'}</p>
           <p><span style="color:#64748b;display:inline-block;width:80px;">Carrier:</span> ${order.transport || '—'}</p>
         </div>
       </div>

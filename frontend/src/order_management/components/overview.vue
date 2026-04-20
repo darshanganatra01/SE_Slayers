@@ -3,7 +3,6 @@
 
     <AppTopbar title="Overview" :meta="today">
       <template #actions>
-        <AppSearchbar v-model="searchQ" placeholder="Search…" />
         <button class="btn btn-primary" @click="$router.push('/orders')">New order</button>
       </template>
     </AppTopbar>
@@ -16,32 +15,19 @@
         <div class="ov-metric">
           <div class="ov-metric-label">Pending orders</div>
           <div class="ov-metric-value">{{ metrics.pending }}</div>
-          <span class="ov-tag ov-tag-a">+2 today</span>
         </div>
         <div class="ov-metric">
           <div class="ov-metric-label">High priority</div>
           <div class="ov-metric-value">{{ metrics.highPriority }}</div>
-          <span class="ov-tag ov-tag-r">Action needed</span>
         </div>
         <div class="ov-metric">
           <div class="ov-metric-label">Low stock items</div>
           <div class="ov-metric-value">{{ metrics.lowStock }}</div>
         </div>
         <div class="ov-metric">
-          <div class="ov-metric-label">Quarterly revenue</div>
+          <div class="ov-metric-label">Monthly revenue</div>
           <div class="ov-metric-value ov-metric-lg">{{ fmtINR(metrics.quarterlyRevenue) }}</div>
-          <span class="ov-tag ov-tag-g">↑ 18% vs Q3</span>
         </div>
-      </div>
-
-      <div class="ov-alert" v-if="overdueAlert && overdueAlert.amount > 0">
-        <svg width="14" height="14" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <div><strong>{{ fmtINR(overdueAlert.amount) }} overdue</strong><span>&nbsp;— {{ overdueAlert.customers }} customers, longest outstanding {{ overdueAlert.longestOutstanding }} days</span></div>
-        <button class="ov-alert-link" @click="$router.push('/customers')">View overdue →</button>
       </div>
 
       <div class="ov-grid">
@@ -117,14 +103,12 @@
 
 <script>
 import AppTopbar    from '../../components/AppTopbar.vue'
-import AppSearchbar from '../../components/AppSearchbar.vue'
 
 export default {
   name: 'OverviewDashboard',
-  components: { AppTopbar, AppSearchbar },
+  components: { AppTopbar },
   data() {
     return {
-      searchQ: '',
       loading: true,
       metrics: { pending: 0, highPriority: 0, lowStock: 0, quarterlyRevenue: 0 },
       priorityOrders: [],
