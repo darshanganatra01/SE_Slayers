@@ -628,6 +628,149 @@ def test_vendor_creation_rejects_invalid_phone_numbers(client, app):
     assert response.get_json()["message"] == "Phone number must be 10 digits. +91 in front is okay."
 
 
+def test_vendor_creation_requires_name(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "   ",
+            "phone": "9876543210",
+            "email": "missing-name@example.com",
+            "address": "Rajkot",
+            "leadTime": 3,
+            "productIds": [],
+            "prices": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Vendor name is required."
+
+
+def test_vendor_creation_rejects_negative_lead_time(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Negative Lead Vendor",
+            "phone": "9876543210",
+            "email": "negative@example.com",
+            "address": "Rajkot",
+            "leadTime": -1,
+            "productIds": [],
+            "prices": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Lead time cannot be negative."
+
+
+def test_vendor_creation_rejects_unknown_selected_products(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Unknown Product Vendor",
+            "phone": "9876543210",
+            "email": "unknown-product@example.com",
+            "address": "Rajkot",
+            "leadTime": 3,
+            "productIds": ["999"],
+            "prices": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Unknown product selection: 999."
+
+
+def test_vendor_creation_rejects_price_entries_for_unknown_products(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        db.session.add(Product(pid="10", pname="Borcap", category="Petrol Engine"))
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Mismatched Price Vendor",
+            "phone": "9876543210",
+            "email": "mismatch@example.com",
+            "address": "Rajkot",
+            "leadTime": 4,
+            "productIds": ["10"],
+            "prices": [
+                {
+                    "productId": "404",
+                    "specs": {"spec1": "12mm x 45 mm"},
+                    "price": "22.00",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["message"] == "Unknown product in price list: 404."
+
+
+def test_vendor_creation_accepts_plus_91_phone_and_deduplicates_products(client, app):
+    with app.app_context():
+        admin = _create_admin()
+        db.session.add(admin)
+        product = Product(pid="10", pname="Borcap", category="Petrol Engine")
+        db.session.add(product)
+        db.session.commit()
+        token = issue_token(admin)
+
+    response = client.post(
+        "/api/vendors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "name": "Shree Vendor House",
+            "phone": "+91 9876543210",
+            "email": "shree@example.com",
+            "address": "Rajkot",
+            "leadTime": 2,
+            "productIds": ["10", "10", "10"],
+            "prices": [],
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.get_json()["vendor"]
+    assert payload["prefix"] == "SVH"
+    assert payload["contact"]["phone"] == "+91 9876543210"
+    assert payload["parts"] == ["Borcap"]
+    assert payload["partCount"] == 1
+
+    with app.app_context():
+        vendor = Vendor.query.filter_by(vendor_name="Shree Vendor House").first()
+        assert vendor is not None
+        assert VendorProduct.query.filter_by(vid=vendor.vid, pid="10").count() == 1
+
+
 def test_vendor_delete_removes_vendor_products_and_skus_when_no_procurement_history(client, app):
     with app.app_context():
         admin = _create_admin()
