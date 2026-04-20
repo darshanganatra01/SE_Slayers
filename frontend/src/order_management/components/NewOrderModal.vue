@@ -141,8 +141,7 @@ export default {
       if (!this.selectedCustomer) return false;
       const validLines = this.lines.filter(l => l.skuid);
       if (validLines.length === 0) return false;
-      
-      return validLines.every(l => l.quantity > 0 && l.stock_qty !== null && l.quantity <= l.stock_qty);
+      return validLines.every(l => l.quantity > 0);
     }
   },
   watch: {

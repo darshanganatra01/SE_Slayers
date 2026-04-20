@@ -10,7 +10,7 @@
         <div class="head-pills">
           <div class="hpill"><span class="hpill-dot" style="background:var(--blue)"></span><span class="hpill-val">{{ customers.length }}</span><span class="hpill-lbl">customers</span></div>
           <div class="hpill"><span class="hpill-dot" style="background:var(--amber)"></span><span class="hpill-val">{{ fmtINR(totalPending) }}</span><span class="hpill-lbl">pending</span></div>
-          <div class="hpill"><span class="hpill-dot" style="background:var(--red)"></span><span class="hpill-val">{{ overdueCount }}</span><span class="hpill-lbl">overdue invoices</span></div>
+          <div class="hpill"><span class="hpill-dot" style="background:var(--red)"></span><span class="hpill-val">{{ overdueCount }}</span><span class="hpill-lbl">unpaid invoices</span></div>
         </div>
       </div>
       <div class="head-row2">
@@ -54,7 +54,7 @@
                 <div class="ccard-name">{{ c.biz }}</div>
                 <div class="ccard-sub">{{ c.loc }}</div>
                 <div class="ccard-tags">
-                  <span v-if="hasOverdue(c)" class="chip" style="background:var(--red-dim);color:var(--red)">⚠ Overdue</span>
+                  <span v-if="hasOverdue(c)" class="chip" style="background:var(--red-dim);color:var(--red)">⚠ Unpaid</span>
                 </div>
               </div>
               <div class="ccard-right">
@@ -96,7 +96,7 @@
                   <div class="dp-cname">{{ selectedCustomer.biz }}</div>
                   <div class="dp-cmeta">{{ selectedCustomer.loc }} · {{ selectedCustomer.phone }}</div>
                   <div class="dp-chip-row" v-if="hasOverdue(selectedCustomer)">
-                    <span class="chip" style="background:var(--red-dim);color:var(--red)">⚠ Overdue</span>
+                    <span class="chip" style="background:var(--red-dim);color:var(--red)">⚠ Unpaid</span>
                   </div>
                 </div>
                 <button class="btn btn-outline" @click="openEdit(selectedCustomer)">Edit</button>
@@ -119,14 +119,13 @@
               <div class="dp-sec">
                 <div class="dp-sec-head"><div class="dp-sec-title">Orders</div></div>
                 <table class="ord-table">
-                  <thead><tr><th>ID</th><th>Date</th><th>Value</th><th>Status</th><th>Payment</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Date</th><th>Value</th><th>Status</th></tr></thead>
                   <tbody>
                     <tr v-for="o in selectedCustomer.orders" :key="o.id">
                       <td class="cell-id">{{ o.id }}</td>
                       <td class="cell-meta">{{ o.date }}</td>
                       <td class="cell-val">{{ fmtINR(o.value) }}</td>
                       <td class="cell-meta">{{ o.status }}</td>
-                      <td><span class="status-pill" :class="payClass(o.paid)">{{ o.paid }}</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -137,26 +136,14 @@
                 <div v-for="inv in selectedCustomer.invoices" :key="inv.id" class="inv-row">
                   <div class="inv-id">{{ inv.id }}</div>
                   <div class="inv-desc">{{ inv.desc }}</div>
-                  <div class="inv-amount">{{ fmtINR(inv.amount) }}</div>
-                  <div class="inv-due" :class="inv.status === 'overdue' ? 'overdue' : inv.status === 'pending' ? 'due-soon' : 'ok'">
-                    {{ inv.status === 'overdue' ? '⚠ OVERDUE' : inv.status === 'pending' ? 'Due ' + inv.due : 'Paid' }}
+                  <div class="inv-date">{{ inv.date }}</div>
+                  <div class="inv-amount">
+                    {{ fmtINR(inv.amount) }}
+                  </div>
+                  <div class="inv-due" :class="inv.status === 'Unpaid' ? 'overdue' : 'ok'">
+                    {{ inv.status === 'Unpaid' ? 'Unpaid: ' + fmtINR(inv.pending) : 'Fully Paid' }}
                   </div>
                   <button class="inv-dl-btn" @click="downloadCustomerInvoice(inv, selectedCustomer)">Download Invoice</button>
-                </div>
-              </div>
-
-              <div class="dp-sec">
-                <div class="dp-sec-head"><div class="dp-sec-title">Payment History</div></div>
-                <div class="timeline">
-                  <div v-for="(t, i) in selectedCustomer.payHistory" :key="i" class="tl-item">
-                    <div class="tl-dot" :style="{ borderColor: t.type==='payment'?'var(--green)':'var(--amber)', background: t.type==='payment'?'var(--green-dim)':'transparent' }"></div>
-                    <div class="tl-body">
-                      <div class="tl-title">{{ t.type === 'payment' ? 'Payment received' : 'Invoice raised' }}
-                        <span class="tl-amount" :style="{ color: t.type==='payment'?'var(--green)':'var(--amber)' }">{{ fmtINR(t.amount) }}</span>
-                      </div>
-                      <div class="tl-meta">{{ t.date }} · {{ t.note }}</div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -187,7 +174,7 @@
               <div class="lc-amount-row">
                 <div>
                   <div class="lc-pending-label">Pending</div>
-                  <div v-if="hasOverdue(c)" style="font-size:10px;color:var(--red);font-weight:700;margin-top:2px">⚠ OVERDUE</div>
+                  <div v-if="hasOverdue(c)" style="font-size:10px;color:var(--red);font-weight:700;margin-top:2px">⚠ UNPAID</div>
                 </div>
                 <div class="lc-pending-val" :style="{ color: hasOverdue(c)?'var(--red)':'var(--ink)' }">{{ fmtINR(c.pending) }}</div>
               </div>
@@ -297,7 +284,7 @@ export default {
   computed: {
     today() { return new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}).toUpperCase() },
     totalPending()        { return this.customers.reduce((a,c) => a+c.pending, 0) },
-    overdueCount()        { return this.customers.flatMap(c => c.invoices).filter(i => i.status==='overdue').length },
+    overdueCount()        { return this.customers.flatMap(c => c.invoices).filter(i => i.status==='Unpaid').length },
     selectedCustomer()    { return this.customers.find(c => c.id===this.selectedId)||null },
     customersWithPending(){ return this.customers.filter(c=>c.pending>0).sort((a,b)=>b.pending-a.pending) },
     filteredCustomers() {
@@ -332,7 +319,7 @@ export default {
     acpRingPct(acp) { const v = acp != null ? acp : 30; return Math.max(0, Math.min(100, 100 - v)) },
     fmtINR(n)       { return '₹'+Number(n).toLocaleString('en-IN') },
     initials(name)  { return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() },
-    hasOverdue(c)   { return c.invoices.some(i=>i.status==='overdue') },
+    hasOverdue(c)   { return c.invoices.some(i=>i.status==='Unpaid') },
     payClass(paid)  { return paid==='Paid'?'sp-paid':paid==='Overdue'?'sp-overdue':'sp-pending' },
     avatarBg(name) {
       const p=['#2c3e50','#1a6b3a','#1e40af','#7b3f00','#5b2d8e','#8b6914','#0b5394','#3d5a80']
@@ -602,6 +589,7 @@ export default {
 .inv-row:last-child { border-bottom: none; }
 .inv-id       { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-3); width: 72px; flex-shrink: 0; }
 .inv-desc     { flex: 1; color: var(--ink-2); }
+.inv-date     { font-size: 11.5px; color: var(--ink-4); width: 90px; flex-shrink: 0; }
 .inv-amount   { font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 500; }
 .inv-due      { font-size: 11px; text-align: right; min-width: 80px; flex-shrink: 0; }
 .inv-due.overdue  { color: var(--red); font-weight: 700; }
