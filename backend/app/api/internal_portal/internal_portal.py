@@ -17,6 +17,7 @@ from flask import request
 import uuid
 import re as re_mod
 from datetime import date
+from app.utils.email_utils import send_customer_shipment_email
 
 internal_ns = Namespace("internal-portal", description="Internal Portal operations")
 
@@ -557,6 +558,7 @@ class InternalShipResource(Resource):
         db.session.add(invoice)
         
         total_inv_amount = 0
+        email_items = []
         for ps_detail in slip.details:
             sku = db.session.query(SA_SKU).filter_by(skuid=ps_detail.skuid).first()
             sale_price = sku.current_sell_rate if sku and sku.current_sell_rate else 0
@@ -578,12 +580,37 @@ class InternalShipResource(Resource):
             db.session.add(inv_detail)
             total_inv_amount += (ps_detail.packed_qty * sale_price)
             
-            # Deduct stock quantity based on packed_qty, lot_size_sell, and unit_measurement_sell
             if sku:
                 unit_sell = sku.unit_measurement_sell or 1
                 lot_sell = sku.lot_size_sell or 1
                 actual_deduction = ps_detail.packed_qty * unit_sell * lot_sell
                 sku.stock_qty = (sku.stock_qty or 0) - actual_deduction
+
+            # Collect data for email notification
+            product_name = ps_detail.skuid
+            specs_str = ""
+            if sku:
+                vp = db.session.query(VendorProduct).filter_by(vpid=sku.vpid).first()
+                if vp:
+                    product = db.session.query(Product).filter_by(pid=vp.pid).first()
+                    if product:
+                        product_name = product.pname
+                
+                if sku.specs:
+                    try:
+                        import json
+                        specs_dict = json.loads(sku.specs) if isinstance(sku.specs, str) else sku.specs
+                        specs_str = " ".join([str(v) for v in specs_dict.values()]) if isinstance(specs_dict, dict) else str(sku.specs)
+                    except:
+                        specs_str = str(sku.specs)
+            
+            email_items.append({
+                "name": product_name,
+                "specs": specs_str,
+                "qty": ps_detail.packed_qty,
+                "price": sale_price,
+                "amount": ps_detail.packed_qty * sale_price
+            })
             
         invoice.total_amount = total_inv_amount
         
@@ -618,6 +645,14 @@ class InternalShipResource(Resource):
         
         app_obj = current_app._get_current_object()
         threading.Thread(target=update_all_sku_thresholds, args=(app_obj,)).start()
+        
+        # TRIGGER ASYNC CUSTOMER SHIPMENT EMAIL
+        customer_email = order.customer.email if order.customer else None
+        if customer_email:
+            threading.Thread(
+                target=send_customer_shipment_email,
+                args=(customer_email, cinv_id, email_items, total_inv_amount, order.coid)
+            ).start()
         
         return {
             "message": "Shipped successfully",

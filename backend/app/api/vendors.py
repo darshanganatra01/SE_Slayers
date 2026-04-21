@@ -16,6 +16,7 @@ from app.models.product import Product
 from app.models.sku import SKU
 from app.models.vendor import Vendor, VendorProduct
 from app.models.vendor_order import VendorOrder, VendorOrderDetail
+from app.utils.email_utils import send_vendor_order_email
 
 vendors_ns = Namespace("vendors", description="Vendor directory endpoints")
 
@@ -953,6 +954,17 @@ class VendorProcurementCollectionResource(Resource):
         db.session.add(order)
         db.session.add(detail)
         db.session.commit()
+
+        # Send email notification to the vendor
+        spec_str = " ".join(str(v) for v in (sku.specs or {}).values() if v)
+        send_vendor_order_email(
+            vendor_email=vendor.email,
+            part_name=product.pname,
+            specification=spec_str or None,
+            quantity=ordered_qty,
+            total_amount=total_amount,
+            order_id=order.void
+        )
 
         return {"procurement": _serialize_procurement(order, detail, sku, vendor, product)}, 201
 
