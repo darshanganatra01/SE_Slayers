@@ -53,3 +53,7 @@ __pycache__/
 .env
 .venv/
 venv/
+
+# Google API Credentials
+credentials.json
+token.json
