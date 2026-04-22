@@ -200,12 +200,13 @@ export default {
       this.isShipping = true
       // Save a snapshot before async refresh replaces the order
       const orderSnapshot = JSON.parse(JSON.stringify(this.order))
+      const invoiceHtml = this.prepareInvoiceHtml(orderSnapshot)
 
       try {
         for (const pslip_id of pslip_ids) {
-          await this.store.ship(pslip_id, '')
+          await this.store.ship(pslip_id, '', invoiceHtml)
         }
-        this.downloadInvoice(orderSnapshot)
+        this.downloadInvoice(orderSnapshot, invoiceHtml)
       } finally {
         this.isShipping = false
       }
@@ -236,7 +237,17 @@ export default {
         this.isMarkingReceived = false
       }
     },
-    downloadInvoice(order) {
+    downloadInvoice(order, htmlContent) {
+      const html = htmlContent || this.prepareInvoiceHtml(order)
+      const blob = new Blob([html], { type: 'text/html' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `Invoice-${order.id}.html`
+      a.click()
+      URL.revokeObjectURL(url)
+    },
+    prepareInvoiceHtml(order) {
       const lines = order.items.map(it =>
         `<tr>
           <td>
@@ -256,7 +267,7 @@ export default {
         </tr>`
       ).join('')
 
-      const html = `<!DOCTYPE html>
+      return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -321,15 +332,8 @@ export default {
   </div>
 </body>
 </html>`
-
-      const blob = new Blob([html], { type: 'text/html' })
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `Invoice-${order.id}.html`
-      a.click()
-      URL.revokeObjectURL(url)
     }
+
   }
 }
 </script>

@@ -194,12 +194,12 @@ export const useOrderStore = defineStore('orders', {
       }
     },
 
-    async ship(pslip_id, transport) {
+    async ship(pslip_id, transport, invoiceHtml) {
       try {
         const res = await fetch('/api/internal-portal/ship', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pslip_id, transport })
+          body: JSON.stringify({ pslip_id, transport, invoice_html: invoiceHtml })
         })
         if (!res.ok) {
           const errData = await res.json()

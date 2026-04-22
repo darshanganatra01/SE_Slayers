@@ -1,6 +1,7 @@
 import os
 import base64
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -113,7 +114,7 @@ Metro Hardware Store
         return False
 
 
-def send_customer_shipment_email(customer_email, invoice_id, items, grand_total, order_id):
+def send_customer_shipment_email(customer_email, invoice_id, items, grand_total, order_id, invoice_html=None):
     """
     Constructs and sends a shipment notification email to a customer.
     
@@ -123,6 +124,7 @@ def send_customer_shipment_email(customer_email, invoice_id, items, grand_total,
         items (list): List of dicts with {name, specs, qty, price, amount}.
         grand_total (float): Total amount of the invoice.
         order_id (str): Reference ID for the customer order.
+        invoice_html (str, optional): Rich HTML invoice content from frontend.
     """
     if not customer_email:
         print(f"Skipping customer email for invoice {invoice_id}: No email provided.")
@@ -132,7 +134,7 @@ def send_customer_shipment_email(customer_email, invoice_id, items, grand_total,
         service = get_gmail_service()
         subject = f"Your Order {order_id} has Shipped! - Invoice {invoice_id}"
 
-        # Build items table
+        # Build items table (Plain Text version)
         table_header = f"{'Product':<30} {'Specs':<20} {'Qty':<5} {'Total (Rs.)':>12}\n"
         table_divider = "-" * 70 + "\n"
         item_rows = ""
@@ -141,7 +143,7 @@ def send_customer_shipment_email(customer_email, invoice_id, items, grand_total,
             specs = (item['specs'][:17] + '...') if len(item['specs']) > 20 else item['specs']
             item_rows += f"{name:<30} {specs:<20} {item['qty']:<5} {float(item['amount']):>12,.2f}\n"
 
-        body = f"""
+        body_text = f"""
 Dear Customer,
 
 Great news! Your order has been shipped. Please find your invoice details below:
@@ -161,9 +163,42 @@ Thank you for shopping with us!
 Metro Hardware Store
 """
 
-        message = MIMEText(body)
+        message = MIMEMultipart("alternative")
         message["to"] = customer_email
         message["subject"] = subject
+
+        # Attach text version
+        part1 = MIMEText(body_text, "plain")
+        message.attach(part1)
+
+        # Attach HTML version if available
+        if invoice_html:
+            # We wrap the frontend invoice HTML with our friendly message
+            full_html = f"""
+            <html>
+                <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">
+                    <div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #2563eb;">Great news! Your order has been shipped.</h2>
+                        <p>Dear Customer,</p>
+                        <p>We are pleased to inform you that your order <strong>{order_id}</strong> has been dispatched. Please find your official invoice below.</p>
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+                        
+                        <!-- Embedded Frontend Invoice -->
+                        {invoice_html}
+                        
+                        <p style="margin-top: 30px;">Please confirm receipt once the shipment arrives.</p>
+                        <p>Thank you for shopping with us!<br><strong>Metro Hardware Store</strong></p>
+                    </div>
+                </body>
+            </html>
+            """
+            part2 = MIMEText(full_html, "html")
+            message.attach(part2)
+        else:
+            # Fallback to simple HTML if frontend didn't send one (shouldn't happen with new UI)
+            simple_html = f"<html><body><pre>{body_text}</pre></body></html>"
+            part2 = MIMEText(simple_html, "html")
+            message.attach(part2)
         
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         send_request = {"raw": raw_message}

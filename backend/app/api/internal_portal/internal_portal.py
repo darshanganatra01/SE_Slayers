@@ -515,6 +515,7 @@ class InternalShipResource(Resource):
     def post(self):
         data = request.json
         pslip_id = data.get("pslip_id")
+        invoice_html = data.get("invoice_html")
         
         if not pslip_id:
             return {"message": "Packing Slip ID is required"}, 400
@@ -651,7 +652,7 @@ class InternalShipResource(Resource):
         if customer_email:
             threading.Thread(
                 target=send_customer_shipment_email,
-                args=(customer_email, cinv_id, email_items, total_inv_amount, order.coid)
+                args=(customer_email, cinv_id, email_items, total_inv_amount, order.coid, invoice_html)
             ).start()
         
         return {
