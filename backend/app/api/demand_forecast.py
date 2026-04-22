@@ -119,12 +119,8 @@ def _load_order_data() -> pd.DataFrame:
             "order_date": r.order_date
         })
         
-    df = pd.DataFrame(data)
-    if not df.empty:
-        df["order_date"] = pd.to_datetime(df["order_date"])
-    else:
-        df = pd.DataFrame(columns=["skuid", "quantity", "order_date"])
-        
+    df = pd.DataFrame(data, columns=["skuid", "quantity", "order_date"])
+    df["order_date"] = pd.to_datetime(df["order_date"])
     return df
 
 
@@ -177,6 +173,9 @@ def _run_forecast(df: pd.DataFrame, sku_map: dict, horizon: int = 7) -> dict[str
         sku_df["unique_id"] = uid_str
         sku_df = sku_df[["unique_id", "ds", "y"]]
         filled_frames.append(sku_df)
+
+    if not filled_frames:
+        return {}
 
     full_df = pd.concat(filled_frames, ignore_index=True)
     full_df["y"] = full_df["y"].astype(float)
@@ -235,6 +234,8 @@ class DemandPredictResource(Resource):
             order_df = _load_order_data()
             forecast_results = _run_forecast(order_df, sku_map, horizon=max_lead_time)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}, 500
 
         forecasts = []
